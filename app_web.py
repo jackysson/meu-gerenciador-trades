@@ -8,7 +8,6 @@ from streamlit_gsheets import GSheetsConnection
 # 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(page_title="Trader Analytics Pro", page_icon="📊", layout="wide")
 
-# Estilo visual profissional
 st.markdown("""
     <style>
     .main { background-color: #0d1117; color: #e6edf3; }
@@ -18,16 +17,26 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. CONEXÃO COM GOOGLE SHEETS
-# Versão simplificada para evitar erros de argumentos inesperados
+# 2. CONEXÃO COM AUTO-CORREÇÃO DE CHAVE (O SEGREDO ESTÁ AQUI)
 def start_connection():
     try:
-        conn = st.connection("gsheets", type=GSheetsConnection)
-        # O link da planilha será lido automaticamente dos Secrets
-        df = conn.read(ttl="0s")
-        return df, conn
+        # 1. Carregar os segredos manualmente
+        if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
+            creds = dict(st.secrets["connections"]["gsheets"])
+            
+            # 2. Limpar a chave privada (converte \n em quebras de linha reais)
+            if "private_key" in creds:
+                creds["private_key"] = creds["private_key"].replace("\\n", "\n")
+            
+            # 3. Iniciar conexão com os dados limpos
+            conn = st.connection("gsheets", type=GSheetsConnection, **creds)
+            df = conn.read(ttl="0s")
+            return df, conn
+        else:
+            st.sidebar.error("❌ Configuração [connections.gsheets] não encontrada nos Secrets.")
+            return pd.DataFrame(columns=["Data", "Ativo", "Tipo", "Volume", "Entrada", "Saída", "SL", "TP", "Lucro", "Obs"]), None
     except Exception as e:
-        st.sidebar.error(f"Erro de Configuração: {e}")
+        st.sidebar.error(f"⚠️ Erro de Configuração: {e}")
         return pd.DataFrame(columns=["Data", "Ativo", "Tipo", "Volume", "Entrada", "Saída", "SL", "TP", "Lucro", "Obs"]), None
 
 df_cloud, conn = start_connection()
@@ -44,14 +53,14 @@ with st.sidebar:
     if conn is not None:
         st.success("✅ Conectado à Nuvem")
     else:
-        st.warning("⚠️ Modo Offline (Verifique os Secrets)")
+        st.warning("⚠️ Modo Offline (Backup Ativo)")
     
     st.session_state.capital_inicial = st.number_input("Capital Inicial (USD)", value=20.0)
     st.divider()
     csv_data = st.session_state.df_trades.to_csv(index=False).encode('utf-8')
     st.download_button("📥 Baixar Backup Manual", csv_data, "backup_trades.csv", "text/csv")
 
-# 4. PROCESSAMENTO DE MÉTRICAS (TODAS AS FUNÇÕES SOLICITADAS)
+# 4. PROCESSAMENTO DE MÉTRICAS (PRO)
 df = st.session_state.df_trades
 for col in ["Lucro", "Entrada", "Saída", "SL", "TP", "Volume"]:
     if col not in df.columns: df[col] = 0
@@ -65,7 +74,7 @@ n_wins, n_losses = len(wins_df), len(loss_df)
 wr = (n_wins / len(df) * 100) if len(df) > 0 else 0
 pf = (wins_df["Lucro"].sum() / abs(loss_df["Lucro"].sum())) if abs(loss_df["Lucro"].sum()) > 0 else 0
 
-# 5. DASHBOARD PRINCIPAL
+# 5. DASHBOARD
 st.title("📊 Trader Strategy Analytics Pro")
 c1, c2, c3, c4, c5 = st.columns(5)
 c1.metric("💰 Equity", f"$ {equity:,.2f}")
@@ -86,19 +95,27 @@ with tab1:
             equity_curve = np.cumsum([st.session_state.capital_inicial] + df["Lucro"].tolist())
             st.plotly_chart(px.area(y=equity_curve, title="Crescimento da Conta", template="plotly_dark"), use_container_width=True)
         with col_b:
-            # Risco em dinheiro (Entrada - SL)
+            # Cálculo de risco médio
             df["Risco_Cash"] = abs(df["Entrada"] - df["SL"]) * df["Volume"] * 1000
             st.plotly_chart(px.bar(df, y="Risco_Cash", title="Risco por Operação ($)", color_discrete_sequence=['#f85149'], template="plotly_dark"), use_container_width=True)
-    else: st.info("Adicione trades para visualizar.")
+    else: st.info("Adicione trades para ver os gráficos.")
 
 with tab2:
-    st.header("📚 Resumo Estratégico")
+    st.header("📚 Resumo Inteligente")
     if not df.empty:
-        st.markdown(f"<div class='insight-card'><h4>Saúde da Estratégia: {'Vencedora 🟢' if pf > 1 else 'Alerta 🔴'}</h4><p>Seu Profit Factor atual é de {pf:.2f}.</p></div>", unsafe_allow_html=True)
+        # Cálculo de perdas médias
+        avg_loss_cash = abs(loss_df["Lucro"].mean()) if n_losses > 0 else 0
+        avg_loss_pts = abs(loss_df["Entrada"] - loss_df["SL"]).mean() if n_losses > 0 else 0
+        
+        st.markdown(f"""<div class='insight-card'><h4>📉 Resumo de Perdas (Risco Real)</h4>
+            <p>Sua perda média por trade é de <b>$ {avg_loss_cash:.2f}</b>.</p>
+            <p>Sua distância média de Stop Loss é de <b>{avg_loss_pts:.3f} pontos</b>.</p></div>""", unsafe_allow_html=True)
+        
+        st.markdown(f"<div class='insight-card'><h4>💹 Saúde: {'Vencedora 🟢' if pf > 1 else 'Alerta 🔴'}</h4><p>Profit Factor: {pf:.2f}.</p></div>", unsafe_allow_html=True)
+        
         media_trade = total_profit / len(df)
         p30 = equity + (media_trade * 30)
-        st.markdown(f"<div class='insight-card'><h4>🔮 Projeção (30 Trades)</h4><p>Estimativa de capital futuro: <b>$ {p30:,.2f}</b>.</p></div>", unsafe_allow_html=True)
-    else: st.info("Aguardando dados para gerar resumo.")
+        st.markdown(f"<div class='insight-card'><h4>🔮 Projeção (30 Trades)</h4><p>Estimativa de capital: <b>$ {p30:,.2f}</b>.</p></div>", unsafe_allow_html=True)
 
 with tab3:
     st.dataframe(df.sort_index(ascending=False).style.format({
@@ -106,7 +123,7 @@ with tab3:
     }), use_container_width=True)
 
 with tab4:
-    with st.form("add_trade_vfinal", clear_on_submit=True):
+    with st.form("add_trade_pro", clear_on_submit=True):
         st.subheader("Registrar Nova Operação")
         r1, r2, r3, r4 = st.columns(4)
         ativo = r1.text_input("Ativo", value=st.session_state.last_asset)
@@ -134,5 +151,5 @@ with tab4:
                     conn.update(data=st.session_state.df_trades)
                     st.success("✅ Salvo na Nuvem!")
                     st.rerun()
-                except Exception as e: st.error(f"Erro ao salvar na nuvem: {e}")
+                except Exception as e: st.error(f"Erro ao salvar: {e}")
             else: st.warning("Salvo apenas localmente.")
