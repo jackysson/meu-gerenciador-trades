@@ -5,7 +5,6 @@ from datetime import datetime
 import numpy as np
 from google.cloud import firestore
 from google.oauth2 import service_account
-import google.auth
 
 # ==========================================
 # 1. CONFIGURAÇÃO DA PÁGINA
@@ -24,7 +23,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. FIRESTORE CLIENT (CACHE)
+# 2. FIRESTORE CLIENT
 # ==========================================
 @st.cache_resource
 def get_firestore_client():
@@ -48,13 +47,53 @@ def get_firestore_client():
 db, db_error = get_firestore_client()
 
 # ==========================================
-# 3. SISTEMA DE AUTENTICAÇÃO (SIMULADO)
+# 3. FUNÇÕES DE DADOS (DEFINIR ANTES DE USAR)
 # ==========================================
-# NOTA: Firebase Auth completo requer backend. 
-# Aqui usamos um sistema simplificado com Firestore.
+def load_data():
+    cols = ["Data", "Ativo", "Tipo", "Volume", "Entrada", "Saída", "SL", "TP", "Lucro", "Obs"]
+    if not db:
+        return pd.DataFrame(columns=cols)
+    
+    try:
+        docs = db.collection("users").document(st.session_state.user_id).collection("trades").order_by("Data").stream()
+        data = []
+        for doc in docs:
+            data.append(doc.to_dict())
+        
+        if data:
+            df = pd.DataFrame(data)
+            for col in cols:
+                if col not in df.columns:
+                    df[col] = None
+            return df[cols]
+        return pd.DataFrame(columns=cols)
+    except:
+        return pd.DataFrame(columns=cols)
 
+def salvar_trade(dados):
+    if not db:
+        return False, "Banco não conectado"
+    
+    plano = st.session_state.get("user_plano", "free")
+    if plano == "free":
+        try:
+            docs = db.collection("users").document(st.session_state.user_id).collection("trades").stream()
+            count = sum(1 for _ in docs)
+            if count >= 50:
+                return False, "🚫 Limite FREE atingido (50 trades). Faça upgrade para PRO!"
+        except:
+            pass
+    
+    try:
+        db.collection("users").document(st.session_state.user_id).collection("trades").add(dados)
+        return True, "✅ Salvo na Nuvem!"
+    except Exception as e:
+        return False, f"❌ Erro: {e}"
+
+# ==========================================
+# 4. TELA DE LOGIN
+# ==========================================
 def login_screen():
-    """Tela de Login / Registro"""
     st.markdown("<h1 style='text-align:center;'>📊 Trader Analytics Pro</h1>", unsafe_allow_html=True)
     st.markdown("<h3 style='text-align:center; color:#8b949e;'>Gestão Profissional de Trades</h3>", unsafe_allow_html=True)
     st.markdown("---")
@@ -69,7 +108,6 @@ def login_screen():
             if not email_login or not senha_login:
                 st.error("Preencha email e senha!")
             else:
-                # Verifica no Firestore
                 if db:
                     users_ref = db.collection("users").where("email", "==", email_login).stream()
                     user_doc = None
@@ -104,15 +142,13 @@ def login_screen():
                 st.error("Senha deve ter pelo menos 6 caracteres!")
             else:
                 if db:
-                    # Verifica se email já existe
                     existing = db.collection("users").where("email", "==", email_reg).stream()
                     if any(existing):
                         st.error("Este email já está cadastrado!")
                     else:
-                        # Cria usuário
                         db.collection("users").add({
                             "email": email_reg,
-                            "senha": senha_reg,  # ⚠️ Em produção, use hash!
+                            "senha": senha_reg,
                             "plano": "free",
                             "criado_em": datetime.now(),
                             "ativo": True
@@ -121,19 +157,16 @@ def login_screen():
                 else:
                     st.error("Banco de dados desconectado!")
     
-    # DISCLAIMER NA TELA DE LOGIN
     st.markdown("""
     <div class='disclaimer'>
     ⚠️ <b>AVISO DE RISCO:</b> Esta plataforma é uma ferramenta de análise estatística. 
-    Não constitui recomendação de investimento ou consultoria financeira. 
-    Trading envolve risco substancial de perda. Resultados passados não garantem resultados futuros. 
-    O usuário é exclusivamente responsável por suas decisões.
+    Não constitui recomendação de investimento. Trading envolve risco de perda.
     </div>
     """, unsafe_allow_html=True)
     
     st.stop()
 
-# Verifica se está logado
+# Verifica login
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 
@@ -141,7 +174,16 @@ if not st.session_state.logged_in:
     login_screen()
 
 # ==========================================
-# 4. BARRA LATERAL (PÓS-LOGIN)
+# 5. INICIALIZAÇÃO DE SESSÃO (AGORA AQUI - ANTES DA SIDEBAR!)
+# ==========================================
+if 'df_trades' not in st.session_state:
+    st.session_state.df_trades = load_data()
+
+if 'last_asset' not in st.session_state:
+    st.session_state.last_asset = "USDJPY"
+
+# ==========================================
+# 6. BARRA LATERAL (AGORA df_trades EXISTE!)
 # ==========================================
 with st.sidebar:
     st.markdown(f"👤 **{st.session_state.user_email}**")
@@ -149,8 +191,6 @@ with st.sidebar:
     plano = st.session_state.get("user_plano", "free")
     if plano == "free":
         st.markdown("🆓 Plano: **FREE** (até 50 trades)")
-        
-        # Banner de Upgrade
         st.markdown("""
         <div class='upgrade-banner'>
             <h4 style='color:white; margin:0;'>🚀 Upgrade para PRO</h4>
@@ -159,10 +199,8 @@ with st.sidebar:
         </div>
         """, unsafe_allow_html=True)
         
-        # LINK DE PAGAMENTO - Substitua pelo seu link real do Stripe/Lemon Squeezy
         if st.button("💳 Assinar PRO", use_container_width=True):
             st.link_button("Ir para Pagamento", "https://buy.stripe.com/SEU_LINK_AQUI", use_container_width=True)
-            st.info("👆 Clique para assinar (configure seu link de pagamento)")
     else:
         st.markdown("⭐ Plano: **PRO** (Ilimitado)")
     
@@ -172,6 +210,7 @@ with st.sidebar:
     st.divider()
     
     st.subheader("💾 Backup Local")
+    # AGORA FUNCIONA POIS df_trades JÁ FOI CRIADO!
     csv_data = st.session_state.df_trades.to_csv(index=False).encode('utf-8')
     st.download_button("📥 Baixar CSV", csv_data, "meus_trades.csv", "text/csv", use_container_width=True)
     
@@ -194,56 +233,8 @@ with st.sidebar:
         st.rerun()
 
 # ==========================================
-# 5. FUNÇÕES DE DADOS (ADAPTADAS POR PLANO)
+# 7. PROCESSAMENTO DE MÉTRICAS
 # ==========================================
-
-def load_data():
-    cols = ["Data", "Ativo", "Tipo", "Volume", "Entrada", "Saída", "SL", "TP", "Lucro", "Obs"]
-    if not db:
-        return pd.DataFrame(columns=cols)
-    
-    try:
-        docs = db.collection("users").document(st.session_state.user_id).collection("trades").order_by("Data").stream()
-        data = []
-        for doc in docs:
-            data.append(doc.to_dict())
-        
-        if data:
-            df = pd.DataFrame(data)
-            for col in cols:
-                if col not in df.columns:
-                    df[col] = None
-            return df[cols]
-        return pd.DataFrame(columns=cols)
-    except:
-        return pd.DataFrame(columns=cols)
-
-def salvar_trade(dados):
-    if not db:
-        return False, "Banco não conectado"
-    
-    # Verifica limite do plano FREE
-    plano = st.session_state.get("user_plano", "free")
-    if plano == "free":
-        docs = db.collection("users").document(st.session_state.user_id).collection("trades").stream()
-        count = sum(1 for _ in docs)
-        if count >= 50:
-            return False, "🚫 Limite FREE atingido (50 trades). Faça upgrade para PRO!"
-    
-    try:
-        db.collection("users").document(st.session_state.user_id).collection("trades").add(dados)
-        return True, "✅ Salvo na Nuvem!"
-    except Exception as e:
-        return False, f"❌ Erro: {e}"
-
-# ==========================================
-# 6. INICIALIZAÇÃO
-# ==========================================
-if 'df_trades' not in st.session_state:
-    st.session_state.df_trades = load_data()
-if 'last_asset' not in st.session_state:
-    st.session_state.last_asset = "USDJPY"
-
 df = st.session_state.df_trades
 
 for col in ["Lucro", "Entrada", "Saída", "SL", "TP", "Volume"]:
@@ -263,7 +254,7 @@ wr = (n_wins / len(df) * 100) if len(df) > 0 else 0
 pf = (df[df["Lucro"] > 0]["Lucro"].sum() / abs(df[df["Lucro"] < 0]["Lucro"].sum())) if abs(df[df["Lucro"] < 0]["Lucro"].sum()) > 0 else 0
 
 # ==========================================
-# 7. DASHBOARD
+# 8. DASHBOARD
 # ==========================================
 st.title("📊 Trader Strategy Analytics Pro")
 c1, c2, c3, c4, c5 = st.columns(5)
@@ -276,7 +267,7 @@ c5.metric("📈 Profit Factor", f"{pf:.2f}")
 st.divider()
 
 # ==========================================
-# 8. ABAS
+# 9. ABAS
 # ==========================================
 tab1, tab2, tab3, tab4 = st.tabs(["🚀 Gráficos", "📚 Insights", "📝 Histórico", "➕ Novo Trade"])
 
@@ -300,10 +291,6 @@ with tab2:
             <h4>📉 Análise de Perdas</h4>
             <p>Perda média: <b>$ {avg_loss_cash:.2f}</b> | <b>{avg_loss_pts:.3f} pts</b></p>
         </div>
-        <div class='insight-card'>
-            <h4>🔮 Projeção (30 Trades)</h4>
-            <p>Capital estimado: <b>$ {equity + (total_profit/len(df) * 30):,.2f}</b></p>
-        </div>
         """, unsafe_allow_html=True)
     else:
         st.info("Aguardando dados.")
@@ -314,63 +301,9 @@ with tab3:
     }), use_container_width=True)
 
 with tab4:
-    # AVISO DE LIMITE FREE
     if st.session_state.get("user_plano") == "free" and len(df) >= 45:
         st.warning(f"⚠️ Você usou {len(df)}/50 trades gratuitos. Faça upgrade para PRO!")
     
     with st.form("add_trade", clear_on_submit=True):
         st.subheader("Registrar Operação")
-        r1, r2, r3, r4 = st.columns(4)
-        ativo = r1.text_input("Ativo", value=st.session_state.last_asset)
-        tipo = r2.selectbox("Tipo", ["buy", "sell"])
-        vol = r3.number_input("Volume", value=0.01, format="%.2f")
-        lucro = r4.number_input("Lucro (USD)", value=0.0, format="%.2f")
-        
-        st.write("---")
-        r5, r6, r7, r8 = st.columns(4)
-        p_in = r5.number_input("Entrada", value=0.0, format="%.3f")
-        p_out = r6.number_input("Saída", value=0.0, format="%.3f")
-        sl = r7.number_input("SL", value=0.0, format="%.3f")
-        tp = r8.number_input("TP", value=0.0, format="%.3f")
-        
-        if st.form_submit_button("💾 SALVAR TRADE", use_container_width=True):
-            st.session_state.last_asset = ativo
-            
-            trade_data = {
-                "Data": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                "Ativo": ativo, "Tipo": tipo, "Volume": float(vol),
-                "Entrada": float(p_in), "Saída": float(p_out),
-                "SL": float(sl), "TP": float(tp), "Lucro": float(lucro), "Obs": ""
-            }
-            
-            nova_linha = [trade_data["Data"], ativo, tipo, vol, p_in, p_out, sl, tp, lucro, ""]
-            st.session_state.df_trades = pd.concat(
-                [st.session_state.df_trades, pd.DataFrame([nova_linha], columns=df.columns)],
-                ignore_index=True
-            )
-            
-            if db:
-                sucesso, msg = salvar_trade(trade_data)
-                if sucesso:
-                    st.success(msg)
-                else:
-                    st.error(msg)
-            else:
-                st.warning("Salvo localmente (nuvem offline).")
-            st.rerun()
-
-# ==========================================
-# 9. RODAPÉ COM DISCLAIMER
-# ==========================================
-st.divider()
-st.markdown("""
-<div class='disclaimer'>
-<b>⚠️ AVISO DE RISCO E RESPONSABILIDADE:</b><br>
-Esta plataforma é uma ferramenta de análise estatística e gestão de trades. 
-Não constitui recomendação de investimento, consultoria financeira ou gestão de ativos. 
-Trading de forex, criptomoedas e outros ativos envolve risco substancial de perda total do capital. 
-Resultados passados não garantem resultados futuros. 
-O usuário é exclusivamente responsável por suas decisões de trading. 
-Termos de Uso | Política de Privacidade
-</div>
-""", unsafe_allow_html=True)
+        r1, r2, 
