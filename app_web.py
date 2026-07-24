@@ -24,7 +24,7 @@ st.markdown("""
 def get_gspread_client():
     try:
         if "google_service_account_json" not in st.secrets:
-            return None
+            return None, "Secret 'google_service_account_json' não encontrado."
             
         json_string = st.secrets["google_service_account_json"].strip()
         
@@ -34,16 +34,18 @@ def get_gspread_client():
             
         creds_dict = json.loads(json_string)
         scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-        creds = Credentials.from_service_account_info(creds_dict, scopes=scope )
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
         client = gspread.authorize(creds)
         
+        if "spreadsheet_url" not in st.secrets:
+            return None, "Secret 'spreadsheet_url' não encontrado."
+            
         sheet = client.open_by_url(st.secrets["spreadsheet_url"]).sheet1
-        return sheet
+        return sheet, None
     except Exception as e:
-        st.sidebar.error(f"Erro de Conexão: {e}")
-        return None
+        return None, str(e)
 
-client_sheet = get_gspread_client()
+client_sheet, error_msg = get_gspread_client()
 
 def load_data():
     cols = ["Data", "Ativo", "Tipo", "Volume", "Entrada", "Saída", "SL", "TP", "Lucro", "Obs"]
@@ -64,8 +66,12 @@ if 'last_asset' not in st.session_state:
 # 3. BARRA LATERAL
 with st.sidebar:
     st.title("🛡️ Gestão de Dados")
-    if client_sheet: st.success("✅ Nuvem Conectada")
-    else: st.warning("⚠️ Modo Offline (Backup Ativo)")
+    if client_sheet:
+        st.success("✅ Nuvem Conectada")
+    else:
+        st.warning("⚠️ Modo Offline")
+        if error_msg:
+            st.error(f"Erro de Conexão: {error_msg}")
     
     st.session_state.capital_inicial = st.number_input("Capital Inicial (USD)", value=20.0)
     st.divider()
