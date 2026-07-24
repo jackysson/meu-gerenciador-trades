@@ -16,11 +16,14 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. INICIALIZAÇÃO DOS DADOS
+# 2. INICIALIZAÇÃO DOS DADOS E MEMÓRIA
 if 'trades' not in st.session_state:
     st.session_state.trades = pd.DataFrame(columns=[
         "Data", "Ativo", "Tipo", "Volume", "Entrada", "Saída", "SL", "TP", "Lucro", "Obs"
     ])
+
+if 'last_asset' not in st.session_state:
+    st.session_state.last_asset = "USDJPY"
 
 if 'capital_inicial' not in st.session_state:
     st.session_state.capital_inicial = 20.0
@@ -87,17 +90,15 @@ with tab1:
             st.info(f"📅 Estimativa 30 dias: **$ {p30:,.2f}**")
             if profit_factor > 1: st.success("Estratégia Vencedora! 🟢")
             else: st.error("Expectativa Negativa. 🔴")
-
-        fig_dist = px.histogram(df, x="Lucro", color=df["Lucro"] > 0, title="Distribuição de Resultados",
-                               color_discrete_map={True: "#3fb950", False: "#f85149"})
-        fig_dist.update_layout(template="plotly_dark", showlegend=False)
-        st.plotly_chart(fig_dist, use_container_width=True)
     else:
         st.warning("Aguardando dados para análise.")
 
 with tab2:
-    # Exibe a tabela com todas as colunas novas
-    st.dataframe(df.sort_index(ascending=False), use_container_width=True)
+    # Formatação de colunas para 3 casas decimais na exibição
+    st.dataframe(df.sort_index(ascending=False).style.format({
+        "Entrada": "{:.3f}", "Saída": "{:.3f}", "SL": "{:.3f}", "TP": "{:.3f}", "Lucro": "{:.2f}"
+    }), use_container_width=True)
+    
     if st.button("🗑️ Resetar Tudo"):
         st.session_state.trades = pd.DataFrame(columns=df.columns)
         st.rerun()
@@ -107,27 +108,29 @@ with tab3:
         st.subheader("Registrar Nova Operação")
         
         row1_1, row1_2, row1_3, row1_4 = st.columns(4)
-        ativo = row1_1.text_input("Ativo (ex: USDJPY)")
+        # Usa o 'last_asset' como valor padrão
+        ativo = row1_1.text_input("Ativo", value=st.session_state.last_asset)
         tipo = row1_2.selectbox("Tipo", ["buy", "sell"])
         vol = row1_3.number_input("Volume/Lote", value=0.01, format="%.2f")
         lucro_manual = row1_4.number_input("Lucro Final (USD)", value=0.0, format="%.2f")
         
         st.write("---")
-        st.write("**Pontos de Preço (Opcional para registro)**")
+        st.write("**Pontos de Preço (Precisão de 3 casas)**")
         row2_1, row2_2, row2_3, row2_4 = st.columns(4)
-        p_in = row2_1.number_input("Preço Entrada", value=0.0, format="%.5f")
-        p_out = row2_2.number_input("Preço Saída", value=0.0, format="%.5f")
-        sl = row2_3.number_input("Stop Loss", value=0.0, format="%.5f")
-        tp = row2_4.number_input("Take Profit", value=0.0, format="%.5f")
+        p_in = row2_1.number_input("Preço Entrada", value=0.0, format="%.3f")
+        p_out = row2_2.number_input("Preço Saída", value=0.0, format="%.3f")
+        sl = row2_3.number_input("Stop Loss", value=0.0, format="%.3f")
+        tp = row2_4.number_input("Take Profit", value=0.0, format="%.3f")
         
-        obs = st.text_input("Observação / Nota Mental")
+        obs = st.text_input("Observação")
         
         if st.form_submit_button("💾 Salvar Trade"):
-            # Lógica simples de cálculo se lucro estiver zerado
+            # Atualiza o último ativo usado para a próxima vez
+            st.session_state.last_asset = ativo
+            
             final_lucro = lucro_manual
             if final_lucro == 0 and p_in != 0 and p_out != 0:
                 diff = (p_out - p_in) if tipo == "buy" else (p_in - p_out)
-                # Multiplicador genérico para Forex (ajuste conforme necessidade)
                 final_lucro = diff * vol * 1000.0 
             
             novo = pd.DataFrame([{
@@ -137,5 +140,5 @@ with tab3:
                 "Lucro": final_lucro, "Obs": obs
             }])
             st.session_state.trades = pd.concat([st.session_state.trades, novo], ignore_index=True)
-            st.success("Operação Registrada!")
+            st.success(f"Trade de {ativo} registrado!")
             st.rerun()
