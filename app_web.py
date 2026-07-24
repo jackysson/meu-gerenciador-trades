@@ -1,4 +1,3 @@
-```python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -975,7 +974,6 @@ if "flash_message" in st.session_state:
 # =========================================================
 
 with st.sidebar:
-    # TEMA
     theme = st.radio(
         "🎨 Aparência",
         ["🌙 Noite", "☀️ Dia"],
@@ -989,7 +987,6 @@ with st.sidebar:
 
     st.divider()
 
-    # CONEXÃO
     st.subheader("☁️ Conexão")
 
     if cloud_connected:
@@ -1011,7 +1008,6 @@ with st.sidebar:
 
     st.divider()
 
-    # CONTA
     st.subheader("👤 Minha conta")
     st.write(usuario_nome)
     st.caption(usuario_email)
@@ -1036,7 +1032,6 @@ with st.sidebar:
 
     st.divider()
 
-    # CONTADOR
     cur = len(st.session_state["df_trades"])
 
     if not is_pro:
@@ -1057,7 +1052,6 @@ with st.sidebar:
 
     st.divider()
 
-    # CAPITAL
     st.subheader("💰 Configuração")
 
     with st.form("capital_form"):
@@ -1091,7 +1085,6 @@ with st.sidebar:
 
     st.divider()
 
-    # EXPORTAÇÃO
     st.subheader("💾 Exportação")
 
     exp_df = st.session_state.get(
@@ -1127,7 +1120,6 @@ with st.sidebar:
 
     st.divider()
 
-    # REDES SOCIAIS
     st.subheader("📱 Conecte-se")
 
     st.markdown(
@@ -1152,7 +1144,6 @@ with st.sidebar:
 
     st.divider()
 
-    # COMPARTILHAR
     st.subheader("🔗 Compartilhar")
 
     app_url = "https://SEU-APP.streamlit.app"
@@ -1188,13 +1179,13 @@ with st.sidebar:
 
 
 # =========================================================
-# DADOS E MÉTRICAS
+# DADOS E METRICAS
 # =========================================================
 
 df = st.session_state["df_trades"].copy()
 
 for col in [
-    "Lucro", "Entrada", "Saída",
+    "Lucro", "Entrada", "Saida",
     "SL", "TP", "Volume",
 ]:
     if col not in df.columns:
@@ -1259,7 +1250,7 @@ st.divider()
     tab_g, tab_i, tab_h, tab_n, tab_p
 ) = st.tabs([
     "🚀 Gráficos",
-    "📚 Insights & Insígnias",
+    "📚 Insights",
     "📝 Histórico",
     "➕ Novo Trade",
     "⭐ Planos",
@@ -1267,7 +1258,7 @@ st.divider()
 
 
 # =========================================================
-# GRÁFICOS
+# GRAFICOS
 # =========================================================
 
 with tab_g:
@@ -1451,7 +1442,7 @@ with tab_i:
 
 
 # =========================================================
-# HISTÓRICO
+# HISTORICO
 # =========================================================
 
 with tab_h:
@@ -1905,32 +1896,3 @@ with tab_p:
         "Finalidade informativa e organizacional. "
         "Não garante resultados. Risco de perda."
     )
-```
-
----
-
-## Substitua
-
-```text
-SEU-APP → nome do seu app no Streamlit
-SEUNUMERO → número com DDD e código do país
-SEUPERFIL → usuário Instagram sem @
-```
-
-## Correções aplicadas no modo noite
-
-```text
-✅ Sidebar inteira com texto claro
-✅ Labels de todos os formulários claros
-✅ Inputs com fundo escuro e texto claro
-✅ Selectbox com fundo escuro
-✅ Alertas com cores adequadas
-✅ Tabs com texto visível
-✅ Captions em cinza claro
-✅ Progress bar visível
-✅ Formulários com fundo escuro
-✅ Dataframes legíveis
-✅ Texto dentro dos cards claro
-```
-
-Faça commit, reinicie e teste ambos os modos.
