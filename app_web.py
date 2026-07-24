@@ -5,161 +5,99 @@ from datetime import datetime
 import numpy as np
 from streamlit_gsheets import GSheetsConnection
 
-# 1. CONFIGURAÇÃO DA PÁGINA
+# 1. CONFIGURAÇÃO
 st.set_page_config(page_title="Trader Analytics Pro", page_icon="📊", layout="wide")
 
-st.markdown("""
-    <style>
-    .main { background-color: #0d1117; color: #e6edf3; }
-    [data-testid="stMetricValue"] { font-size: 26px !important; color: #58a6ff !important; }
-    .stMetric { background-color: #161b22; padding: 15px; border-radius: 12px; border: 1px solid #30363d; }
-    .insight-card { background-color: #1c2128; padding: 20px; border-radius: 10px; border-left: 5px solid #58a6ff; margin-bottom: 15px; }
-    </style>
-    """, unsafe_allow_html=True)
+# 2. CONEXÃO
+conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 2. CONEXÃO COM GOOGLE SHEETS
-def get_connection():
+def load_data():
     try:
-        creds = st.secrets["connections"]["gsheets"]
-        fixed_key = creds["private_key"].replace("\\n", "\n")
-        conn = st.connection("gsheets", type=GSheetsConnection, spreadsheet=creds["spreadsheet"],
-                            project_id=creds["project_id"], private_key_id=creds["private_key_id"],
-                            private_key=fixed_key, client_email=creds["client_email"], client_id=creds["client_id"])
-        return conn.read(ttl="0s"), conn
+        # Tenta ler da nuvem
+        return conn.read(ttl="0s")
     except:
-        return pd.DataFrame(columns=["Data", "Ativo", "Tipo", "Volume", "Entrada", "Saída", "SL", "TP", "Lucro", "Obs"]), None
-
-df_cloud, conn = get_connection()
+        # Se falhar, cria o banco do zero com TODAS as colunas que você pediu
+        return pd.DataFrame(columns=["Data", "Ativo", "Tipo", "Volume", "Entrada", "Saída", "SL", "TP", "Lucro", "Obs"])
 
 if 'df_trades' not in st.session_state:
-    st.session_state.df_trades = df_cloud
-
-if 'last_asset' not in st.session_state:
-    st.session_state.last_asset = "USDJPY"
+    st.session_state.df_trades = load_data()
 
 # 3. BARRA LATERAL
 with st.sidebar:
     st.title("🛡️ Gestão de Dados")
-    if conn is None: st.warning("⚙️ Modo Offline (Backup Ativo)")
-    else: st.success("☁️ Conectado à Nuvem")
+    # Botão para limpar a memória se o backup antigo estiver travando tudo
+    if st.button("🚨 Resetar Memória Local"):
+        st.session_state.df_trades = load_data()
+        st.rerun()
     
-    st.session_state.capital_inicial = st.number_input("Capital Inicial (USD)", value=20.0)
     st.divider()
     st.subheader("💾 Backup Manual")
     csv_data = st.session_state.df_trades.to_csv(index=False).encode('utf-8')
     st.download_button("📥 Baixar Meus Dados (CSV)", csv_data, "meus_trades.csv", "text/csv")
-    uploaded_file = st.file_uploader("📂 Carregar Backup", type="csv")
-    if uploaded_file:
-        try:
-            st.session_state.df_trades = pd.read_csv(uploaded_file)
-            st.success("Dados carregados!")
-        except: st.error("Erro no arquivo.")
 
-# 4. PROCESSAMENTO DE MÉTRICAS DETALHADAS
+# 4. PROCESSAMENTO (O CORAÇÃO DO SISTEMA)
 df = st.session_state.df_trades
-# Garantir que colunas existam
-cols_necessarias = ["Data", "Ativo", "Tipo", "Volume", "Entrada", "Saída", "SL", "TP", "Lucro", "Obs"]
-for c in cols_necessarias:
-    if c not in df.columns: df[c] = 0
+
+# FORÇAR AS COLUNAS (Isso evita o erro do backup antigo)
+for c in ["Data", "Ativo", "Tipo", "Volume", "Entrada", "Saída", "SL", "TP", "Lucro", "Obs"]:
+    if c not in df.columns:
+        df[c] = 0
 
 df["Lucro"] = pd.to_numeric(df["Lucro"], errors='coerce').fillna(0)
-df["Entrada"] = pd.to_numeric(df["Entrada"], errors='coerce').fillna(0)
-df["SL"] = pd.to_numeric(df["SL"], errors='coerce').fillna(0)
+total_profit = df["Lucro"].sum()
+equity = 20.0 + total_profit # Capital inicial fixo em 20
 
-def calc_risk_metrics(row):
-    try:
-        if row["Entrada"] != 0 and row["SL"] != 0:
-            pts = abs(row["Entrada"] - row["SL"])
-            cash = pts * float(row["Volume"]) * 1000.0
-            return pts, cash
-    except: pass
-    return 0, 0
-
-if not df.empty:
-    df[["SL_Pts", "SL_Cash"]] = df.apply(lambda r: pd.Series(calc_risk_metrics(r)), axis=1)
-    avg_sl_pts = df[df["SL_Pts"] > 0]["SL_Pts"].mean() if not df[df["SL_Pts"] > 0].empty else 0
-    avg_sl_cash = df[df["SL_Cash"] > 0]["SL_Cash"].mean() if not df[df["SL_Cash"] > 0].empty else 0
-    total_profit = df["Lucro"].sum()
-    wins_df = df[df["Lucro"] > 0]
-    loss_df = df[df["Lucro"] < 0]
-    n_wins, n_losses = len(wins_df), len(loss_df)
-    wr = (n_wins / len(df) * 100) if len(df) > 0 else 0
-    pf = (wins_df["Lucro"].sum() / abs(loss_df["Lucro"].sum())) if abs(loss_df["Lucro"].sum()) > 0 else 0
-else:
-    avg_sl_pts = avg_sl_cash = total_profit = n_wins = n_losses = wr = pf = 0
-
-equity = st.session_state.capital_inicial + total_profit
-
-# 5. DASHBOARD DE MÉTRICAS
+# 5. DASHBOARD
 st.title("📊 Trader Strategy Analytics Pro")
-c1, c2, c3, c4, c5 = st.columns(5)
+c1, c2, c3 = st.columns(3)
 c1.metric("💰 Equity", f"$ {equity:,.2f}")
-c2.metric("✅ Vitórias", n_wins)
-c3.metric("❌ Derrotas", n_losses)
-c4.metric("🎯 Win Rate", f"{wr:.1f}%")
-c5.metric("📈 Profit Factor", f"{pf:.2f}")
-
-st.divider()
+c2.metric("📈 Lucro Total", f"$ {total_profit:,.2f}")
+c3.metric("🎯 Total Trades", len(df))
 
 # 6. ABAS
-tab1, tab2, tab3, tab4 = st.tabs(["🚀 Gráficos", "📚 Insights & Resumo", "📝 Histórico", "➕ Novo Trade"])
+tab1, tab2, tab3 = st.tabs(["📝 Histórico Real", "➕ Novo Trade", "🚀 Gráficos"])
 
 with tab1:
-    if not df.empty:
-        col_a, col_b = st.columns(2)
-        with col_a:
-            equity_curve = np.cumsum([st.session_state.capital_inicial] + df["Lucro"].tolist())
-            st.plotly_chart(px.area(x=range(len(equity_curve)), y=equity_curve, title="Curva de Crescimento", template="plotly_dark"), use_container_width=True)
-        with col_b:
-            st.plotly_chart(px.bar(df, x=df.index, y="SL_Cash", title="Risco Planejado ($)", color_discrete_sequence=['#f85149'], template="plotly_dark"), use_container_width=True)
-    else: st.warning("Adicione trades para ver os gráficos.")
+    st.subheader("Seus Trades Salvos")
+    # Mostra o histórico do mais novo para o mais antigo
+    st.dataframe(df.sort_index(ascending=False), use_container_width=True)
 
 with tab2:
-    st.header("📚 Resumo Inteligente das Métricas")
-    if not df.empty:
-        st.markdown(f"""<div class='insight-card'><h4>💹 Saúde: {'Vencedora 🟢' if pf > 1 else 'Alerta 🔴'}</h4>
-            <p>Seu Profit Factor é <b>{pf:.2f}</b>. Para cada $1 perdido, você ganha ${pf:.2f}.</p></div>""", unsafe_allow_html=True)
-        
-        st.markdown(f"""<div class='insight-card'><h4>📉 Gestão de Risco (Médias)</h4>
-            <p>Perda média em dinheiro: <b>$ {avg_sl_cash:.2f}</b></p>
-            <p>Perda média em pontos: <b>{avg_sl_pts:.3f} pts</b></p></div>""", unsafe_allow_html=True)
-        
-        media_trade = total_profit / len(df)
-        p30 = equity + (media_trade * 30)
-        st.markdown(f"""<div class='insight-card'><h4>🔮 Projeção Futura (30 Trades)</h4>
-            <p>Mantendo este ritmo, seu capital estimado será de <b>$ {p30:,.2f}</b>.</p></div>""", unsafe_allow_html=True)
-    else: st.info("Aguardando dados...")
-
-with tab3:
-    st.dataframe(df.sort_index(ascending=False).style.format({
-        "Entrada": "{:.3f}", "Saída": "{:.3f}", "SL": "{:.3f}", "TP": "{:.3f}", "Lucro": "{:.2f}"
-    }), use_container_width=True)
-
-with tab4:
-    with st.form("add_trade", clear_on_submit=True):
-        st.subheader("Registrar Nova Operação")
-        r1, r2, r3, r4 = st.columns(4)
-        ativo = r1.text_input("Ativo", value=st.session_state.last_asset)
-        tipo = r2.selectbox("Tipo", ["buy", "sell"])
-        vol = r3.number_input("Volume", value=0.01, format="%.2f")
-        lucro = r4.number_input("Lucro (USD)", value=0.0, format="%.2f")
+    with st.form("form_v3", clear_on_submit=True):
+        st.subheader("Registrar Operação")
+        col1, col2, col3 = st.columns(3)
+        ativo = col1.text_input("Ativo", value="USDJPY")
+        tipo = col2.selectbox("Tipo", ["buy", "sell"])
+        lucro = col3.number_input("Lucro (USD)", format="%.2f")
         
         st.write("---")
-        st.write("**Preços (3 casas decimais)**")
-        r5, r6, r7, r8 = st.columns(4)
-        p_in = r5.number_input("Entrada", value=0.0, format="%.3f")
-        p_out = r6.number_input("Saída", value=0.0, format="%.3f")
-        sl = r7.number_input("Stop Loss", value=0.0, format="%.3f")
-        tp = r8.number_input("Take Profit", value=0.0, format="%.3f")
+        col4, col5, col6, col7 = st.columns(4)
+        p_in = col4.number_input("Entrada", format="%.3f")
+        p_out = col5.number_input("Saída", format="%.3f")
+        sl = col6.number_input("SL", format="%.3f")
+        tp = col7.number_input("TP", format="%.3f")
         
-        if st.form_submit_button("💾 SALVAR TRADE (ENTER)"):
-            st.session_state.last_asset = ativo
+        if st.form_submit_button("💾 SALVAR AGORA"):
             novo = pd.DataFrame([{
-                "Data": datetime.now().strftime("%Y-%m-%d"), "Ativo": ativo, "Tipo": tipo, "Volume": vol,
-                "Entrada": p_in, "Saída": p_out, "SL": sl, "TP": tp, "Lucro": lucro, "Obs": ""
+                "Data": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "Ativo": ativo, "Tipo": tipo, "Volume": 0.01,
+                "Entrada": p_in, "Saída": p_out, "SL": sl, "TP": tp,
+                "Lucro": lucro, "Obs": ""
             }])
+            
+            # ATUALIZA A MEMÓRIA NA HORA
             st.session_state.df_trades = pd.concat([st.session_state.df_trades, novo], ignore_index=True)
-            if conn is not None:
-                try: conn.update(data=st.session_state.df_trades); st.success("✅ SALVO NA NUVEM!"); st.rerun()
-                except: st.error("Erro na nuvem.")
-            else: st.warning("⚠️ Salvo apenas localmente.")
+            
+            # TENTA SALVAR NA NUVEM
+            try:
+                conn.update(data=st.session_state.df_trades)
+                st.success("✅ SALVO NA NUVEM E NO HISTÓRICO!")
+            except:
+                st.warning("⚠️ Salvo no Histórico, mas a Nuvem falhou (Secrets).")
+            
+            st.rerun() # ISSO FORÇA O HISTÓRICO A ATUALIZAR
+
+with tab3:
+    if not df.empty:
+        equity_curve = np.cumsum([20.0] + df["Lucro"].tolist())
+        st.plotly_chart(px.area(y=equity_curve, title="Crescimento"), use_container_width=True)
