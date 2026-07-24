@@ -6,7 +6,7 @@ import numpy as np
 from streamlit_gsheets import GSheetsConnection
 
 # 1. CONFIGURAÇÃO DA PÁGINA
-st.set_page_config(page_title="Trader Analytics (Persistente)", page_icon="📊", layout="wide")
+st.set_page_config(page_title="Trader Analytics Pro", page_icon="📊", layout="wide")
 
 st.markdown("""
     <style>
@@ -16,89 +16,85 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. CONEXÃO COM GOOGLE SHEETS
-# Nota: Você precisará configurar as credenciais no Streamlit Cloud (veja instruções abaixo)
+# 2. CONEXÃO HÍBRIDA (GOOGLE SHEETS + MEMÓRIA LOCAL)
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def load_data():
     try:
-        # Tenta ler a planilha. Se estiver vazia, retorna o esqueleto
+        # Tenta ler do Google Sheets (ttl=0 para dados sempre frescos)
         return conn.read(ttl="0s")
     except:
+        # Se falhar (sem internet ou sem config), retorna DataFrame vazio com as colunas certas
         return pd.DataFrame(columns=["Data", "Ativo", "Tipo", "Volume", "Entrada", "Saída", "SL", "TP", "Lucro", "Obs"])
 
-df = load_data()
+# Carrega os dados iniciais se não existirem na sessão
+if 'df_trades' not in st.session_state:
+    st.session_state.df_trades = load_data()
 
-# Inicialização de memória local
 if 'last_asset' not in st.session_state:
     st.session_state.last_asset = "USDJPY"
-if 'capital_inicial' not in st.session_state:
-    st.session_state.capital_inicial = 20.0
 
-# 3. BARRA LATERAL
+# 3. BARRA LATERAL (BACKUP MANUAL)
 with st.sidebar:
-    st.title("🛡️ Gestão de Risco")
-    st.session_state.capital_inicial = st.number_input("Capital Atual (USD)", value=st.session_state.capital_inicial)
-    st.divider()
-    st.info("💡 Seus dados estão sendo salvos automaticamente no Google Sheets.")
+    st.title("🛡️ Segurança de Dados")
+    st.info("Nuvem: Google Sheets Ativo")
     
-    if not df.empty:
-        csv = df.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Baixar Backup Local (CSV)", csv, "backup_trades.csv", "text/csv")
+    # Botão de Download (Manual)
+    if not st.session_state.df_trades.empty:
+        csv_data = st.session_state.df_trades.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Baixar Backup Manual (CSV)", csv_data, "meu_backup_trades.csv", "text/csv")
+    
+    # Botão de Upload (Manual)
+    uploaded_file = st.file_uploader("📂 Restaurar de Backup Manual", type="csv")
+    if uploaded_file:
+        st.session_state.df_trades = pd.read_csv(uploaded_file)
+        st.success("Backup restaurado na memória!")
+        # Opcional: st.rerun()
+
+    st.divider()
+    st.session_state.capital_inicial = st.number_input("Capital Inicial (USD)", value=20.0)
 
 # 4. PROCESSAMENTO DE MÉTRICAS
-st.title("📊 Trader Strategy Analytics (Google Cloud)")
+st.title("📊 Trader Strategy Analytics")
+df = st.session_state.df_trades
 df["Lucro"] = pd.to_numeric(df["Lucro"], errors='coerce').fillna(0)
 
 total_profit = df["Lucro"].sum()
 equity = st.session_state.capital_inicial + total_profit
-wins_df = df[df["Lucro"] > 0]
-loss_df = df[df["Lucro"] < 0]
-total_trades = len(df)
-n_wins = len(wins_df)
-n_losses = len(loss_df)
+n_wins = len(df[df["Lucro"] > 0])
+n_losses = len(df[df["Lucro"] < 0])
+wr = (n_wins / len(df) * 100) if len(df) > 0 else 0
 
-wr = (n_wins / total_trades * 100) if total_trades > 0 else 0
-profit_factor = (wins_df["Lucro"].sum() / abs(loss_df["Lucro"].sum())) if abs(loss_df["Lucro"].sum()) > 0 else 0
-
-# 5. LAYOUT DE CARDS
-c1, c2, c3, c4, c5 = st.columns(5)
+# Cards
+c1, c2, c3, c4 = st.columns(4)
 c1.metric("💰 Equity", f"$ {equity:,.2f}")
 c2.metric("✅ Vitórias", n_wins)
 c3.metric("❌ Derrotas", n_losses)
 c4.metric("🎯 Win Rate", f"{wr:.1f}%")
-c5.metric("📈 Profit Factor", f"{profit_factor:.2f}")
 
 st.divider()
 
-# 6. ABAS
-tab1, tab2, tab3 = st.tabs(["🚀 Análise & Projeção", "📝 Histórico", "➕ Registrar Operação"])
+# 5. ABAS
+tab1, tab2, tab3 = st.tabs(["🚀 Performance", "📝 Histórico", "➕ Novo Trade"])
 
 with tab1:
-    if total_trades > 0:
-        col_left, col_right = st.columns([2, 1])
-        with col_left:
-            equity_curve = np.cumsum([st.session_state.capital_inicial] + df["Lucro"].tolist())
-            fig_eq = px.area(x=range(len(equity_curve)), y=equity_curve, title="Crescimento da Conta")
-            fig_eq.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)')
-            st.plotly_chart(fig_eq, use_container_width=True)
-            
-        with col_right:
-            st.subheader("🔮 Projeção (30 dias)")
-            media_por_trade = total_profit / total_trades
-            p30 = equity + (media_por_trade * 30) # Estimativa simples
-            st.info(f"📅 Estimativa 30 dias: **$ {p30:,.2f}**")
+    if not df.empty:
+        equity_curve = np.cumsum([st.session_state.capital_inicial] + df["Lucro"].tolist())
+        fig = px.area(x=range(len(equity_curve)), y=equity_curve, title="Curva de Crescimento")
+        fig.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)')
+        st.plotly_chart(fig, use_container_width=True)
     else:
-        st.warning("Aguardando dados para análise.")
+        st.warning("Sem dados para análise.")
 
 with tab2:
+    # Exibição com 3 casas decimais
     st.dataframe(df.sort_index(ascending=False).style.format({
         "Entrada": "{:.3f}", "Saída": "{:.3f}", "SL": "{:.3f}", "TP": "{:.3f}", "Lucro": "{:.2f}"
     }), use_container_width=True)
 
 with tab3:
-    with st.form("form_add", clear_on_submit=True):
-        st.subheader("Registrar Nova Operação")
+    with st.form("add_trade", clear_on_submit=True):
+        st.subheader("Nova Operação")
         r1, r2, r3, r4 = st.columns(4)
         ativo = r1.text_input("Ativo", value=st.session_state.last_asset)
         tipo = r2.selectbox("Tipo", ["buy", "sell"])
@@ -112,17 +108,23 @@ with tab3:
         sl = r7.number_input("SL", value=0.0, format="%.3f")
         tp = r8.number_input("TP", value=0.0, format="%.3f")
         
-        if st.form_submit_button("💾 Salvar no Google Sheets"):
+        if st.form_submit_button("💾 Salvar (Nuvem + Local)"):
             st.session_state.last_asset = ativo
-            novo_trade = pd.DataFrame([{
+            novo = pd.DataFrame([{
                 "Data": datetime.now().strftime("%Y-%m-%d"),
                 "Ativo": ativo, "Tipo": tipo, "Volume": vol,
                 "Entrada": p_in, "Saída": p_out, "SL": sl, "TP": tp,
                 "Lucro": lucro, "Obs": ""
             }])
             
-            # Atualiza a planilha
-            df_atualizado = pd.concat([df, novo_trade], ignore_index=True)
-            conn.update(data=df_atualizado)
-            st.success("Salvo com sucesso na nuvem!")
+            # 1. Atualiza Memória Local
+            st.session_state.df_trades = pd.concat([st.session_state.df_trades, novo], ignore_index=True)
+            
+            # 2. Tenta salvar no Google Sheets
+            try:
+                conn.update(data=st.session_state.df_trades)
+                st.success("Dados sincronizados com Google Sheets! ✅")
+            except:
+                st.warning("Salvo apenas localmente. Verifique a conexão com o Google. ⚠️")
+            
             st.rerun()
