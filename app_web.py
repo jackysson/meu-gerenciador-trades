@@ -1,22 +1,3 @@
-Aqui está a versão final completa com todas as correções:
-
----
-
-## 1. `requirements.txt`
-
-```text
-streamlit>=1.42
-pandas
-plotly
-numpy
-google-cloud-firestore
-google-auth
-```
-
----
-
-## 2. `app_web.py`
-
 ```python
 import streamlit as st
 import pandas as pd
@@ -87,22 +68,28 @@ def apply_theme(mode):
                 background-color: #ffffff !important;
                 color: #1a1a2e !important;
             }
+
             section[data-testid="stSidebar"] {
                 background-color: #f0f2f6 !important;
             }
+
             [data-testid="stMetricValue"] {
                 font-size: 26px !important;
                 color: #0066cc !important;
             }
-            [data-testid="stMetricLabel"] {
+
+            [data-testid="stMetricLabel"],
+            [data-testid="stMetricDelta"] {
                 color: #333333 !important;
             }
+
             .stMetric {
                 background-color: #f8f9fa !important;
                 padding: 15px;
                 border-radius: 12px;
                 border: 1px solid #dee2e6;
             }
+
             .insight-card {
                 background-color: #f0f7ff !important;
                 padding: 20px;
@@ -111,6 +98,7 @@ def apply_theme(mode):
                 margin-bottom: 15px;
                 color: #1a1a2e !important;
             }
+
             .badge-card {
                 background-color: #f8f9fa !important;
                 padding: 18px;
@@ -120,6 +108,7 @@ def apply_theme(mode):
                 margin-bottom: 12px;
                 color: #1a1a2e !important;
             }
+
             .plan-card {
                 background-color: #f8f9fa !important;
                 padding: 25px;
@@ -128,6 +117,7 @@ def apply_theme(mode):
                 margin-bottom: 15px;
                 color: #1a1a2e !important;
             }
+
             .connection-ok {
                 background-color: #d4edda;
                 color: #155724;
@@ -138,6 +128,7 @@ def apply_theme(mode):
                 font-size: 14px;
                 margin-bottom: 10px;
             }
+
             .connection-off {
                 background-color: #fff3cd;
                 color: #856404;
@@ -148,10 +139,38 @@ def apply_theme(mode):
                 font-size: 14px;
                 margin-bottom: 10px;
             }
+
+            h1, h2, h3, h4, h5, h6,
+            p, span, label, li, td, th {
+                color: #1a1a2e !important;
+            }
+
+            .stAlert > div {
+                color: #1a1a2e !important;
+            }
+
+            .stTabs [data-baseweb="tab"] {
+                color: #333333 !important;
+            }
+
+            .stTabs [aria-selected="true"] {
+                color: #0066cc !important;
+            }
+
+            .stTextInput label,
+            .stNumberInput label,
+            .stSelectbox label,
+            .stTextArea label,
+            .stRadio label,
+            .stForm label,
+            .stDownloadButton label {
+                color: #333333 !important;
+            }
             </style>
             """,
             unsafe_allow_html=True,
         )
+
     else:
         st.markdown(
             """
@@ -160,16 +179,33 @@ def apply_theme(mode):
                 background-color: #0d1117 !important;
                 color: #e6edf3 !important;
             }
+
+            section[data-testid="stSidebar"] {
+                background-color: #161b22 !important;
+                color: #e6edf3 !important;
+            }
+
+            section[data-testid="stSidebar"] * {
+                color: #e6edf3 !important;
+            }
+
             [data-testid="stMetricValue"] {
                 font-size: 26px !important;
                 color: #58a6ff !important;
             }
+
+            [data-testid="stMetricLabel"],
+            [data-testid="stMetricDelta"] {
+                color: #8b949e !important;
+            }
+
             .stMetric {
                 background-color: #161b22 !important;
                 padding: 15px;
                 border-radius: 12px;
                 border: 1px solid #30363d;
             }
+
             .insight-card {
                 background-color: #1c2128 !important;
                 padding: 20px;
@@ -178,6 +214,7 @@ def apply_theme(mode):
                 margin-bottom: 15px;
                 color: #e6edf3 !important;
             }
+
             .badge-card {
                 background-color: #161b22 !important;
                 padding: 18px;
@@ -187,6 +224,7 @@ def apply_theme(mode):
                 margin-bottom: 12px;
                 color: #e6edf3 !important;
             }
+
             .plan-card {
                 background-color: #161b22 !important;
                 padding: 25px;
@@ -195,9 +233,10 @@ def apply_theme(mode):
                 margin-bottom: 15px;
                 color: #e6edf3 !important;
             }
+
             .connection-ok {
-                background-color: #0d2818;
-                color: #3fb950;
+                background-color: #0d2818 !important;
+                color: #3fb950 !important;
                 padding: 10px 16px;
                 border-radius: 10px;
                 border: 1px solid #238636;
@@ -205,15 +244,106 @@ def apply_theme(mode):
                 font-size: 14px;
                 margin-bottom: 10px;
             }
+
             .connection-off {
-                background-color: #2d1b00;
-                color: #f0883e;
+                background-color: #2d1b00 !important;
+                color: #f0883e !important;
                 padding: 10px 16px;
                 border-radius: 10px;
                 border: 1px solid #9e6a03;
                 font-weight: bold;
                 font-size: 14px;
                 margin-bottom: 10px;
+            }
+
+            h1, h2, h3, h4, h5, h6 {
+                color: #e6edf3 !important;
+            }
+
+            p, span, li, td, th, div {
+                color: #c9d1d9 !important;
+            }
+
+            label, .stMarkdown p {
+                color: #c9d1d9 !important;
+            }
+
+            .stAlert > div {
+                color: #c9d1d9 !important;
+            }
+
+            .stWarning > div {
+                color: #e3b341 !important;
+            }
+
+            .stInfo > div {
+                color: #58a6ff !important;
+            }
+
+            .stSuccess > div {
+                color: #3fb950 !important;
+            }
+
+            .stError > div {
+                color: #f85149 !important;
+            }
+
+            .stTextInput label,
+            .stNumberInput label,
+            .stSelectbox label,
+            .stTextArea label,
+            .stRadio label,
+            .stForm label,
+            .stDownloadButton label {
+                color: #e6edf3 !important;
+            }
+
+            .stTextInput input,
+            .stNumberInput input,
+            .stTextArea textarea {
+                color: #e6edf3 !important;
+                background-color: #0d1117 !important;
+                border-color: #30363d !important;
+            }
+
+            .stSelectbox [data-baseweb="select"] {
+                color: #e6edf3 !important;
+                background-color: #0d1117 !important;
+            }
+
+            .stTabs [data-baseweb="tab"] {
+                color: #8b949e !important;
+            }
+
+            .stTabs [aria-selected="true"] {
+                color: #e6edf3 !important;
+            }
+
+            .stCaption {
+                color: #8b949e !important;
+            }
+
+            .stDataFrame {
+                color: #e6edf3 !important;
+            }
+
+            .stProgress > div > div {
+                background-color: #58a6ff !important;
+            }
+
+            .stProgress label {
+                color: #c9d1d9 !important;
+            }
+
+            .stForm {
+                background-color: #161b22 !important;
+                border: 1px solid #30363d !important;
+                border-radius: 12px !important;
+                padding: 15px !important;
+            }
+
+            .streamlit-expanderHeader {
+                color: #e6edf3 !important;
             }
             </style>
             """,
@@ -251,8 +381,7 @@ if not is_user_logged_in:
         st.error(
             "⚠️ O login ainda não foi configurado. "
             "O administrador precisa configurar a seção "
-            "[auth] e [gcp_service_account] nos Secrets "
-            "do Streamlit."
+            "[auth] e [gcp_service_account] nos Secrets."
         )
 
         st.markdown(
@@ -260,7 +389,7 @@ if not is_user_logged_in:
             ### Como configurar
 
             1. Crie uma **Credencial OAuth** no Google Cloud;
-            2. Adicione o **Client ID** e **Client Secret** nos Secrets;
+            2. Adicione **Client ID** e **Client Secret** nos Secrets;
             3. Configure o **redirect_uri** correto;
             4. Reinicie o aplicativo.
             """
@@ -270,17 +399,13 @@ if not is_user_logged_in:
         try:
             st.login()
         except Exception as erro:
-            st.error(
-                f"Erro ao iniciar o login: {erro}"
-            )
+            st.error(f"Erro ao iniciar login: {erro}")
 
     st.divider()
 
     st.caption(
-        "A plataforma possui finalidade informativa, "
-        "estatística e organizacional. Não oferece "
-        "recomendação de investimento nem garante "
-        "resultados."
+        "Plataforma informativa e organizacional. "
+        "Não oferece recomendação de investimento."
     )
 
     st.stop()
@@ -690,7 +815,9 @@ def load_initial_capital(user_id):
     if not doc.exists:
         return 20.0
 
-    return float(doc.to_dict().get("initial_capital", 20.0))
+    return float(
+        doc.to_dict().get("initial_capital", 20.0)
+    )
 
 
 def save_initial_capital(user_id, capital):
@@ -751,14 +878,14 @@ def calculate_badges(df):
         badges.append({
             "icon": "🎯",
             "name": "Alta Precisão",
-            "description": "Win rate 60%+ em 20 operações.",
+            "description": "Win rate 60%+ em 20 ops.",
         })
 
     if total >= 20 and wr >= 70:
         badges.append({
             "icon": "👑",
             "name": "Mestre da Precisão",
-            "description": "Win rate 70%+ em 20 operações.",
+            "description": "Win rate 70%+ em 20 ops.",
         })
 
     if total >= 20 and profit > 0:
@@ -784,11 +911,17 @@ def calculate_badges(df):
 
 if cloud_connected and db is not None:
     try:
-        ensure_user(usuario_id, usuario_nome, usuario_email)
+        ensure_user(
+            usuario_id,
+            usuario_nome,
+            usuario_email,
+        )
     except Exception:
         st.warning("Não foi possível criar seu perfil.")
 else:
-    st.warning("Modo offline: dados não serão salvos na nuvem.")
+    st.warning(
+        "Modo offline: dados não serão salvos na nuvem."
+    )
 
 if st.session_state.get("active_user_id") != usuario_id:
     st.session_state["active_user_id"] = usuario_id
@@ -801,14 +934,20 @@ if st.session_state.get("active_user_id") != usuario_id:
 
 if "df_trades" not in st.session_state:
     try:
-        st.session_state["df_trades"] = load_trades(usuario_id)
+        st.session_state["df_trades"] = load_trades(
+            usuario_id
+        )
     except Exception:
-        st.session_state["df_trades"] = pd.DataFrame(columns=TRADE_COLUMNS)
+        st.session_state["df_trades"] = pd.DataFrame(
+            columns=TRADE_COLUMNS
+        )
         st.error("Erro ao carregar trades.")
 
 if "initial_capital" not in st.session_state:
     try:
-        st.session_state["initial_capital"] = load_initial_capital(usuario_id)
+        st.session_state["initial_capital"] = (
+            load_initial_capital(usuario_id)
+        )
     except Exception:
         st.session_state["initial_capital"] = 20.0
 
@@ -816,7 +955,10 @@ if "last_asset" not in st.session_state:
     st.session_state["last_asset"] = "USDJPY"
 
 try:
-    plan_info = get_plan_info(usuario_id, usuario_email)
+    plan_info = get_plan_info(
+        usuario_id,
+        usuario_email,
+    )
 except Exception:
     st.error("Erro ao verificar plano.")
     st.stop()
@@ -852,13 +994,17 @@ with st.sidebar:
 
     if cloud_connected:
         st.markdown(
-            '<div class="connection-ok">✅ Nuvem Conectada</div>',
+            '<div class="connection-ok">'
+            "✅ Nuvem Conectada"
+            "</div>",
             unsafe_allow_html=True,
         )
         st.caption("Firestore ativo.")
     else:
         st.markdown(
-            '<div class="connection-off">⚠️ Modo Offline</div>',
+            '<div class="connection-off">'
+            "⚠️ Modo Offline"
+            "</div>",
             unsafe_allow_html=True,
         )
         st.caption("Dados não salvos na nuvem.")
@@ -871,12 +1017,19 @@ with st.sidebar:
     st.caption(usuario_email)
 
     if owner:
-        st.success("🛡️ Desenvolvedor — Pro permanente")
+        st.success(
+            "🛡️ Desenvolvedor — Pro permanente"
+        )
     elif is_pro:
         st.success("⭐ Plano Pro — R$ 29,90/mês")
-        exp = plan_info.get("subscription_expires_at")
+        exp = plan_info.get(
+            "subscription_expires_at"
+        )
         if exp:
-            st.caption(f"Acesso até {exp.strftime('%d/%m/%Y')}.")
+            st.caption(
+                f"Acesso até "
+                f"{exp.strftime('%d/%m/%Y')}."
+            )
     else:
         st.info("🆓 Plano Gratuito")
         st.caption("Limite de 10 trades.")
@@ -890,13 +1043,17 @@ with st.sidebar:
         rem = max(0, FREE_TRADE_LIMIT - cur)
         st.progress(
             min(cur / FREE_TRADE_LIMIT, 1.0),
-            text=f"{cur}/{FREE_TRADE_LIMIT} trades",
+            text=(
+                f"{cur}/{FREE_TRADE_LIMIT} trades"
+            ),
         )
         st.caption(f"Restam {rem} trade(s).")
         if cur >= FREE_TRADE_LIMIT:
             st.warning("Limite atingido.")
     else:
-        st.caption(f"{cur} trade(s) registrados.")
+        st.caption(
+            f"{cur} trade(s) registrados."
+        )
 
     st.divider()
 
@@ -907,16 +1064,28 @@ with st.sidebar:
         cap_val = st.number_input(
             "Capital Inicial (USD)",
             min_value=0.0,
-            value=float(st.session_state["initial_capital"]),
+            value=float(
+                st.session_state["initial_capital"]
+            ),
             step=1.0,
             format="%.2f",
         )
 
-        if st.form_submit_button("💾 Salvar capital", use_container_width=True):
+        if st.form_submit_button(
+            "💾 Salvar capital",
+            use_container_width=True,
+        ):
             try:
-                save_initial_capital(usuario_id, cap_val)
-                st.session_state["initial_capital"] = cap_val
-                st.success("Capital atualizado!")
+                save_initial_capital(
+                    usuario_id,
+                    cap_val,
+                )
+                st.session_state[
+                    "initial_capital"
+                ] = cap_val
+                st.success(
+                    "Capital atualizado!"
+                )
             except Exception:
                 st.error("Erro ao salvar.")
 
@@ -925,9 +1094,16 @@ with st.sidebar:
     # EXPORTAÇÃO
     st.subheader("💾 Exportação")
 
-    exp_df = st.session_state.get("df_trades", pd.DataFrame(columns=TRADE_COLUMNS))
-    exp_cols = [c for c in TRADE_COLUMNS if c != "id"]
-    csv = exp_df[exp_cols].to_csv(index=False).encode("utf-8")
+    exp_df = st.session_state.get(
+        "df_trades",
+        pd.DataFrame(columns=TRADE_COLUMNS),
+    )
+    exp_cols = [
+        c for c in TRADE_COLUMNS if c != "id"
+    ]
+    csv = exp_df[exp_cols].to_csv(
+        index=False
+    ).encode("utf-8")
 
     st.download_button(
         "📥 Baixar dados",
@@ -937,9 +1113,14 @@ with st.sidebar:
         use_container_width=True,
     )
 
-    if st.button("🔄 Sincronizar", use_container_width=True):
+    if st.button(
+        "🔄 Sincronizar",
+        use_container_width=True,
+    ):
         try:
-            st.session_state["df_trades"] = load_trades(usuario_id)
+            st.session_state["df_trades"] = (
+                load_trades(usuario_id)
+            )
             st.rerun()
         except Exception:
             st.error("Erro ao sincronizar.")
@@ -975,7 +1156,9 @@ with st.sidebar:
     st.subheader("🔗 Compartilhar")
 
     app_url = "https://SEU-APP.streamlit.app"
-    share = "Estou usando o Trader Analytics Pro!"
+    share = (
+        "Estou usando o Trader Analytics Pro!"
+    )
 
     st.markdown(
         f"""
@@ -997,7 +1180,10 @@ with st.sidebar:
 
     st.divider()
 
-    if st.button("🚪 Sair", use_container_width=True):
+    if st.button(
+        "🚪 Sair",
+        use_container_width=True,
+    ):
         st.logout()
 
 
@@ -1007,23 +1193,43 @@ with st.sidebar:
 
 df = st.session_state["df_trades"].copy()
 
-for col in ["Lucro", "Entrada", "Saída", "SL", "TP", "Volume"]:
+for col in [
+    "Lucro", "Entrada", "Saída",
+    "SL", "TP", "Volume",
+]:
     if col not in df.columns:
         df[col] = 0
-    df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+    df[col] = pd.to_numeric(
+        df[col], errors="coerce"
+    ).fillna(0)
 
 loss_df = df[df["Lucro"] < 0]
 win_df = df[df["Lucro"] > 0]
 loss_count = len(loss_df)
 win_count = len(win_df)
 
-avg_loss_cash = abs(loss_df["Lucro"].mean()) if loss_count > 0 else 0
-avg_loss_pts = abs(loss_df["Entrada"] - loss_df["SL"]).mean() if loss_count > 0 else 0
+avg_loss_cash = (
+    abs(loss_df["Lucro"].mean())
+    if loss_count > 0
+    else 0
+)
+
+avg_loss_pts = (
+    abs(loss_df["Entrada"] - loss_df["SL"]).mean()
+    if loss_count > 0
+    else 0
+)
 
 total_profit = df["Lucro"].sum()
 ic = st.session_state["initial_capital"]
 equity = ic + total_profit
-win_rate = win_count / len(df) * 100 if len(df) > 0 else 0
+
+win_rate = (
+    win_count / len(df) * 100
+    if len(df) > 0
+    else 0
+)
+
 gp = win_df["Lucro"].sum()
 gl = abs(loss_df["Lucro"].sum())
 pf = gp / gl if gl > 0 else 0
@@ -1049,7 +1255,9 @@ st.divider()
 # ABAS
 # =========================================================
 
-tab_g, tab_i, tab_h, tab_n, tab_p = st.tabs([
+(
+    tab_g, tab_i, tab_h, tab_n, tab_p
+) = st.tabs([
     "🚀 Gráficos",
     "📚 Insights & Insígnias",
     "📝 Histórico",
@@ -1064,7 +1272,9 @@ tab_g, tab_i, tab_h, tab_n, tab_p = st.tabs([
 
 with tab_g:
     if df.empty:
-        st.info("Adicione trades para ver os gráficos.")
+        st.info(
+            "Adicione trades para ver os gráficos."
+        )
     else:
         a, b = st.columns(2)
 
@@ -1074,14 +1284,20 @@ with tab_g:
                 x=list(range(1, len(eq) + 1)),
                 y=eq,
                 title="Crescimento da Conta",
-                labels={"x": "Trade", "y": "Equity"},
+                labels={
+                    "x": "Trade", "y": "Equity",
+                },
                 template="plotly_dark",
             )
-            st.plotly_chart(fig1, use_container_width=True)
+            st.plotly_chart(
+                fig1, use_container_width=True
+            )
 
         with b:
             rdf = df.copy()
-            rdf["Risco"] = abs(rdf["Entrada"] - rdf["SL"])
+            rdf["Risco"] = abs(
+                rdf["Entrada"] - rdf["SL"]
+            )
             fig2 = px.bar(
                 rdf,
                 x="Ativo",
@@ -1090,32 +1306,50 @@ with tab_g:
                 color_discrete_sequence=["#f85149"],
                 template="plotly_dark",
             )
-            st.plotly_chart(fig2, use_container_width=True)
+            st.plotly_chart(
+                fig2, use_container_width=True
+            )
 
         if is_pro:
             c, d = st.columns(2)
 
             with c:
                 fig3 = px.pie(
-                    names=["Vitórias", "Derrotas"],
-                    values=[win_count, loss_count],
+                    names=[
+                        "Vitórias", "Derrotas",
+                    ],
+                    values=[
+                        win_count, loss_count,
+                    ],
                     title="Distribuição",
                     template="plotly_dark",
-                    color_discrete_sequence=["#3fb950", "#f85149"],
+                    color_discrete_sequence=[
+                        "#3fb950", "#f85149",
+                    ],
                 )
-                st.plotly_chart(fig3, use_container_width=True)
+                st.plotly_chart(
+                    fig3, use_container_width=True
+                )
 
             with d:
-                ap = df.groupby("Ativo")["Lucro"].sum().reset_index()
+                ap = (
+                    df.groupby("Ativo")["Lucro"]
+                    .sum()
+                    .reset_index()
+                )
                 fig4 = px.bar(
                     ap,
                     x="Ativo",
                     y="Lucro",
                     title="Lucro por Ativo",
-                    color_discrete_sequence=["#58a6ff"],
+                    color_discrete_sequence=[
+                        "#58a6ff"
+                    ],
                     template="plotly_dark",
                 )
-                st.plotly_chart(fig4, use_container_width=True)
+                st.plotly_chart(
+                    fig4, use_container_width=True
+                )
 
 
 # =========================================================
@@ -1124,10 +1358,13 @@ with tab_g:
 
 with tab_i:
     if not is_pro:
-        st.subheader("🔒 Recurso exclusivo do Pro")
+        st.subheader(
+            "🔒 Recurso exclusivo do Pro"
+        )
         st.info(
             "Assine o Plano Pro por R$ 29,90/mês "
-            "para acessar resumos, insights e insígnias."
+            "para acessar resumos, insights "
+            "e insígnias."
         )
         st.markdown("""
         ### Recursos exclusivos do Pro
@@ -1144,7 +1381,9 @@ with tab_i:
         st.header("📚 Resumo Estatístico")
 
         if df.empty:
-            st.info("Adicione trades para gerar análises.")
+            st.info(
+                "Adicione trades para gerar análises."
+            )
         else:
             st.markdown(
                 f"""
@@ -1157,7 +1396,11 @@ with tab_i:
                 unsafe_allow_html=True,
             )
 
-            at = total_profit / len(df) if len(df) > 0 else 0
+            at = (
+                total_profit / len(df)
+                if len(df) > 0
+                else 0
+            )
             s30 = equity + at * 30
 
             st.markdown(
@@ -1181,11 +1424,20 @@ with tab_i:
             badges = calculate_badges(df)
 
             if not badges:
-                st.info("Continue registrando para desbloquear insígnias.")
+                st.info(
+                    "Continue registrando para "
+                    "desbloquear insígnias."
+                )
             else:
-                cols = st.columns(min(len(badges), 3))
-                for idx, badge in enumerate(badges):
-                    with cols[idx % len(cols)]:
+                cols = st.columns(
+                    min(len(badges), 3)
+                )
+                for idx, badge in enumerate(
+                    badges
+                ):
+                    with cols[
+                        idx % len(cols)
+                    ]:
                         st.markdown(
                             f"""
                             <div class="badge-card">
@@ -1206,28 +1458,58 @@ with tab_h:
     if df.empty:
         st.info("Nenhum trade registrado.")
     else:
-        if "confirm_delete_id" in st.session_state:
-            did = st.session_state["confirm_delete_id"]
-            st.warning(f"⚠️ Excluir trade {did[:8]}?")
+        if (
+            "confirm_delete_id"
+            in st.session_state
+        ):
+            did = st.session_state[
+                "confirm_delete_id"
+            ]
+            st.warning(
+                f"⚠️ Excluir trade {did[:8]}?"
+            )
 
             cc, cx = st.columns(2)
             with cc:
-                if st.button("✅ Sim, excluir", type="primary", use_container_width=True):
+                if st.button(
+                    "✅ Sim, excluir",
+                    type="primary",
+                    use_container_width=True,
+                ):
                     try:
-                        delete_trade(usuario_id, did)
-                        st.session_state.pop("confirm_delete_id", None)
-                        st.session_state["df_trades"] = load_trades(usuario_id)
+                        delete_trade(
+                            usuario_id, did
+                        )
+                        st.session_state.pop(
+                            "confirm_delete_id",
+                            None,
+                        )
+                        st.session_state[
+                            "df_trades"
+                        ] = load_trades(
+                            usuario_id
+                        )
                         st.success("Excluído!")
                         st.rerun()
                     except Exception:
-                        st.error("Erro ao excluir.")
+                        st.error(
+                            "Erro ao excluir."
+                        )
             with cx:
-                if st.button("❌ Cancelar", use_container_width=True):
-                    st.session_state.pop("confirm_delete_id", None)
+                if st.button(
+                    "❌ Cancelar",
+                    use_container_width=True,
+                ):
+                    st.session_state.pop(
+                        "confirm_delete_id",
+                        None,
+                    )
                     st.rerun()
             st.divider()
 
-        eid = st.session_state.get("editing_trade_id")
+        eid = st.session_state.get(
+            "editing_trade_id"
+        )
 
         if eid:
             tr = df[df["id"] == eid]
@@ -1236,59 +1518,166 @@ with tab_h:
                 st.subheader("✏️ Editar Trade")
 
                 with st.form("edit_form"):
-                    e1, e2, e3, e4 = st.columns(4)
-                    ed_a = e1.text_input("Ativo", value=r["Ativo"])
-                    ed_t = e2.selectbox("Tipo", ["buy", "sell"], index=0 if r["Tipo"] == "buy" else 1)
-                    ed_v = e3.number_input("Volume", min_value=0.01, value=float(r["Volume"]), step=0.01, format="%.2f")
-                    ed_p = e4.number_input("Lucro", value=float(r["Lucro"]), format="%.2f")
+                    e1, e2, e3, e4 = (
+                        st.columns(4)
+                    )
+                    ed_a = e1.text_input(
+                        "Ativo", value=r["Ativo"],
+                    )
+                    ed_t = e2.selectbox(
+                        "Tipo",
+                        ["buy", "sell"],
+                        index=(
+                            0
+                            if r["Tipo"] == "buy"
+                            else 1
+                        ),
+                    )
+                    ed_v = e3.number_input(
+                        "Volume",
+                        min_value=0.01,
+                        value=float(r["Volume"]),
+                        step=0.01,
+                        format="%.2f",
+                    )
+                    ed_p = e4.number_input(
+                        "Lucro",
+                        value=float(r["Lucro"]),
+                        format="%.2f",
+                    )
                     st.divider()
-                    e5, e6, e7, e8 = st.columns(4)
-                    ed_en = e5.number_input("Entrada", value=float(r["Entrada"]), format="%.3f")
-                    ed_ex = e6.number_input("Saída", value=float(r["Saída"]), format="%.3f")
-                    ed_sl = e7.number_input("SL", value=float(r["SL"]), format="%.3f")
-                    ed_tp = e8.number_input("TP", value=float(r["TP"]), format="%.3f")
-                    ed_ob = st.text_area("Obs", value=r["Obs"], max_chars=500)
+                    e5, e6, e7, e8 = (
+                        st.columns(4)
+                    )
+                    ed_en = e5.number_input(
+                        "Entrada",
+                        value=float(r["Entrada"]),
+                        format="%.3f",
+                    )
+                    ed_ex = e6.number_input(
+                        "Saída",
+                        value=float(r["Saída"]),
+                        format="%.3f",
+                    )
+                    ed_sl = e7.number_input(
+                        "SL",
+                        value=float(r["SL"]),
+                        format="%.3f",
+                    )
+                    ed_tp = e8.number_input(
+                        "TP",
+                        value=float(r["TP"]),
+                        format="%.3f",
+                    )
+                    ed_ob = st.text_area(
+                        "Obs",
+                        value=r["Obs"],
+                        max_chars=500,
+                    )
 
                     s1, s2 = st.columns(2)
                     with s1:
-                        if st.form_submit_button("💾 Salvar", type="primary", use_container_width=True):
+                        if st.form_submit_button(
+                            "💾 Salvar",
+                            type="primary",
+                            use_container_width=True,
+                        ):
                             try:
                                 td = {
-                                    "asset": ed_a.strip().upper(), "type": ed_t,
-                                    "volume": ed_v, "entry": ed_en, "exit": ed_ex,
-                                    "sl": ed_sl, "tp": ed_tp, "profit": ed_p,
-                                    "observation": ed_ob.strip(),
+                                    "asset": (
+                                        ed_a.strip()
+                                        .upper()
+                                    ),
+                                    "type": ed_t,
+                                    "volume": ed_v,
+                                    "entry": ed_en,
+                                    "exit": ed_ex,
+                                    "sl": ed_sl,
+                                    "tp": ed_tp,
+                                    "profit": ed_p,
+                                    "observation": (
+                                        ed_ob.strip()
+                                    ),
                                 }
-                                edit_trade(usuario_id, eid, td)
-                                st.session_state.pop("editing_trade_id", None)
-                                st.session_state["df_trades"] = load_trades(usuario_id)
-                                st.success("Atualizado!")
+                                edit_trade(
+                                    usuario_id,
+                                    eid,
+                                    td,
+                                )
+                                st.session_state.pop(
+                                    "editing_trade_id",
+                                    None,
+                                )
+                                st.session_state[
+                                    "df_trades"
+                                ] = load_trades(
+                                    usuario_id
+                                )
+                                st.success(
+                                    "Atualizado!"
+                                )
                                 st.rerun()
                             except Exception:
-                                st.error("Erro ao salvar.")
+                                st.error(
+                                    "Erro ao salvar."
+                                )
                     with s2:
-                        if st.form_submit_button("❌ Cancelar", use_container_width=True):
-                            st.session_state.pop("editing_trade_id", None)
+                        if st.form_submit_button(
+                            "❌ Cancelar",
+                            use_container_width=True,
+                        ):
+                            st.session_state.pop(
+                                "editing_trade_id",
+                                None,
+                            )
                             st.rerun()
             st.divider()
 
-        dcols = [c for c in TRADE_COLUMNS if c != "id"]
-        st.dataframe(df[dcols].sort_index(ascending=False), use_container_width=True, hide_index=True)
+        dcols = [
+            c
+            for c in TRADE_COLUMNS
+            if c != "id"
+        ]
+        st.dataframe(
+            df[dcols].sort_index(
+                ascending=False
+            ),
+            use_container_width=True,
+            hide_index=True,
+        )
         st.divider()
 
         st.subheader("Ações por trade")
         tids = df["id"].tolist()
-        sel = st.selectbox("Selecione o ID", options=tids, format_func=lambda x: f"{x[:8]}..." if len(x) > 8 else x)
+        sel = st.selectbox(
+            "Selecione o ID",
+            options=tids,
+            format_func=lambda x: (
+                f"{x[:8]}..."
+                if len(x) > 8
+                else x
+            ),
+        )
 
         if sel:
             ce, cd = st.columns(2)
             with ce:
-                if st.button("✏️ Editar", use_container_width=True):
-                    st.session_state["editing_trade_id"] = sel
+                if st.button(
+                    "✏️ Editar",
+                    use_container_width=True,
+                ):
+                    st.session_state[
+                        "editing_trade_id"
+                    ] = sel
                     st.rerun()
             with cd:
-                if st.button("🗑️ Excluir", use_container_width=True):
-                    st.session_state["confirm_delete_id"] = sel
+                if st.button(
+                    "🗑️ Excluir",
+                    use_container_width=True,
+                ):
+                    st.session_state[
+                        "confirm_delete_id"
+                    ] = sel
                     st.rerun()
 
 
@@ -1301,46 +1690,119 @@ with tab_n:
     fl = not is_pro and cc >= FREE_TRADE_LIMIT
 
     if fl:
-        st.warning("Limite de 10 trades atingido.")
-        st.info("Pro: trades ilimitados por R$ 29,90/mês.")
+        st.warning(
+            "Limite de 10 trades atingido."
+        )
+        st.info(
+            "Pro: trades ilimitados por "
+            "R$ 29,90/mês."
+        )
     else:
-        with st.form("add_trade", clear_on_submit=True):
+        with st.form(
+            "add_trade",
+            clear_on_submit=True,
+        ):
             st.subheader("Registrar Operação")
             r1, r2, r3, r4 = st.columns(4)
-            at = r1.text_input("Ativo", value=st.session_state.get("last_asset", "USDJPY"))
-            tt = r2.selectbox("Tipo", ["buy", "sell"])
-            vl = r3.number_input("Volume", min_value=0.01, value=0.01, step=0.01, format="%.2f")
-            pr = r4.number_input("Lucro (USD)", value=0.0, format="%.2f")
+            at = r1.text_input(
+                "Ativo",
+                value=st.session_state.get(
+                    "last_asset", "USDJPY"
+                ),
+            )
+            tt = r2.selectbox(
+                "Tipo", ["buy", "sell"],
+            )
+            vl = r3.number_input(
+                "Volume",
+                min_value=0.01,
+                value=0.01,
+                step=0.01,
+                format="%.2f",
+            )
+            pr = r4.number_input(
+                "Lucro (USD)",
+                value=0.0,
+                format="%.2f",
+            )
             st.divider()
             r5, r6, r7, r8 = st.columns(4)
-            en = r5.number_input("Entrada", value=0.0, format="%.3f")
-            ex = r6.number_input("Saída", value=0.0, format="%.3f")
-            sl = r7.number_input("SL", value=0.0, format="%.3f")
-            tp = r8.number_input("TP", value=0.0, format="%.3f")
-            ob = st.text_area("Observação", max_chars=500)
+            en = r5.number_input(
+                "Entrada",
+                value=0.0,
+                format="%.3f",
+            )
+            ex = r6.number_input(
+                "Saída",
+                value=0.0,
+                format="%.3f",
+            )
+            sl = r7.number_input(
+                "SL",
+                value=0.0,
+                format="%.3f",
+            )
+            tp = r8.number_input(
+                "TP",
+                value=0.0,
+                format="%.3f",
+            )
+            ob = st.text_area(
+                "Observação",
+                max_chars=500,
+            )
 
-            if st.form_submit_button("💾 SALVAR TRADE", type="primary", use_container_width=True):
+            if st.form_submit_button(
+                "💾 SALVAR TRADE",
+                type="primary",
+                use_container_width=True,
+            ):
                 errs = []
                 if not at.strip():
-                    errs.append("Informe o ativo.")
+                    errs.append(
+                        "Informe o ativo."
+                    )
                 if vl <= 0:
-                    errs.append("Volume deve ser maior que zero.")
+                    errs.append(
+                        "Volume maior que zero."
+                    )
 
                 if errs:
                     for e in errs:
                         st.error(e)
                 else:
                     td = {
-                        "asset": at.strip().upper(), "type": tt,
-                        "volume": vl, "entry": en, "exit": ex,
-                        "sl": sl, "tp": tp, "profit": pr,
-                        "observation": ob.strip(),
+                        "asset": (
+                            at.strip().upper()
+                        ),
+                        "type": tt,
+                        "volume": vl,
+                        "entry": en,
+                        "exit": ex,
+                        "sl": sl,
+                        "tp": tp,
+                        "profit": pr,
+                        "observation": (
+                            ob.strip()
+                        ),
                     }
                     try:
-                        save_trade(usuario_id, usuario_email, td)
-                        st.session_state["last_asset"] = at.strip().upper()
-                        st.session_state["df_trades"] = load_trades(usuario_id)
-                        st.session_state["flash_message"] = "✅ Trade salvo!"
+                        save_trade(
+                            usuario_id,
+                            usuario_email,
+                            td,
+                        )
+                        st.session_state[
+                            "last_asset"
+                        ] = at.strip().upper()
+                        st.session_state[
+                            "df_trades"
+                        ] = load_trades(
+                            usuario_id
+                        )
+                        st.session_state[
+                            "flash_message"
+                        ] = "✅ Trade salvo!"
                         st.rerun()
                     except PermissionError as e:
                         st.warning(str(e))
@@ -1398,7 +1860,9 @@ with tab_p:
             unsafe_allow_html=True,
         )
         if owner:
-            st.success("🛡️ Pro permanente (dev).")
+            st.success(
+                "🛡️ Pro permanente (dev)."
+            )
         elif is_pro:
             st.success("⭐ Pro ativo.")
         else:
@@ -1429,70 +1893,44 @@ with tab_p:
         ],
     })
 
-    st.dataframe(comp, use_container_width=True, hide_index=True)
+    st.dataframe(
+        comp,
+        use_container_width=True,
+        hide_index=True,
+    )
+
     st.divider()
-    st.caption("Finalidade informativa e organizacional. Não garante resultados. Risco de perda.")
+
+    st.caption(
+        "Finalidade informativa e organizacional. "
+        "Não garante resultados. Risco de perda."
+    )
 ```
 
 ---
 
-## 3. Template dos Secrets
-
-```toml
-owner_emails = ["seu-email@gmail.com"]
-
-[auth]
-client_id = "CLIENT_ID_DO_GOOGLE_OAUTH.apps.googleusercontent.com"
-client_secret = "GOCSPX-CLIENT_SECRET_AQUI"
-redirect_uri = "https://SEU-APP.streamlit.app/oauth2callback"
-server_metadata_url = "https://accounts.google.com/.well-known/openid-configuration"
-
-[gcp_service_account]
-type = "service_account"
-project_id = "projeto-trade-75a34"
-private_key_id = "ID_DA_NOVA_CHAVE"
-private_key = """-----BEGIN PRIVATE KEY-----
-CONTEUDO_DA_NOVA_CHAVE
------END PRIVATE KEY-----
-"""
-client_email = "CONTA@projeto-trade-75a34.iam.gserviceaccount.com"
-client_id = "ID_DA_CONTA_SERVICO"
-auth_uri = "https://accounts.google.com/o/oauth2/auth"
-token_uri = "https://oauth2.googleapis.com/token"
-auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
-client_x509_cert_url = "URL_DO_CERTIFICADO"
-universe_domain = "googleapis.com"
-```
-
----
-
-## O que precisa ser substituído
+## Substitua
 
 ```text
-SEU-APP       → nome do seu app no Streamlit
-SEUNUMERO     → número com DDD e código do país
-SEUPERFIL     → usuário Instagram sem @
+SEU-APP → nome do seu app no Streamlit
+SEUNUMERO → número com DDD e código do país
+SEUPERFIL → usuário Instagram sem @
 ```
 
-## Correções aplicadas nesta versão
+## Correções aplicadas no modo noite
 
 ```text
-✅ st.user.is_logged_in → check_user_login()
-✅ firebase_admin → google-cloud-firestore
-✅ Login com verificação de Secrets [auth]
-✅ Mensagem amiga se auth não configurada
-✅ Tema dia / noite
-✅ Indicador de conexão com a nuvem
-✅ Planos gratuitos, Pro e owner
-✅ Controle de 10 trades no gratuito
-✅ Edição e exclusão de trades
-✅ Insígnias apenas no Pro
-✅ Gráficos extras apenas no Pro
-✅ Exportação CSV
-✅ Capital inicial permanente
-✅ Redes sociais e compartilhamento
-✅ Proteção contra troca de sessão
-✅ Tratamento de erros em cada operação
+✅ Sidebar inteira com texto claro
+✅ Labels de todos os formulários claros
+✅ Inputs com fundo escuro e texto claro
+✅ Selectbox com fundo escuro
+✅ Alertas com cores adequadas
+✅ Tabs com texto visível
+✅ Captions em cinza claro
+✅ Progress bar visível
+✅ Formulários com fundo escuro
+✅ Dataframes legíveis
+✅ Texto dentro dos cards claro
 ```
 
-Faça commit, reinicie o app pelo **Manage app → Reboot app** e teste.
+Faça commit, reinicie e teste ambos os modos.
