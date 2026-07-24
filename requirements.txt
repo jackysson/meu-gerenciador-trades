@@ -1,7 +1,6 @@
-streamlit
+streamlit>=1.42
 pandas
 plotly
 numpy
 google-cloud-firestore
 google-auth
-
