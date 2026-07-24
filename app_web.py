@@ -4,11 +4,11 @@ import plotly.express as px
 from datetime import datetime
 import numpy as np
 from streamlit_gsheets import GSheetsConnection
+import os
 
 # 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(page_title="Trader Analytics Pro", page_icon="📊", layout="wide")
 
-# Estilo visual
 st.markdown("""
     <style>
     .main { background-color: #0d1117; color: #e6edf3; }
@@ -18,22 +18,37 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. TENTATIVA DE CONEXÃO (SEM TRAVAR O APP)
-def get_data():
+# 2. FUNÇÃO PARA CONSERTAR A CHAVE E CONECTAR
+def get_connection():
     try:
-        # Tenta conectar usando a biblioteca oficial
-        conn = st.connection("gsheets", type=GSheetsConnection)
+        # Tenta pegar os dados dos secrets
+        creds = st.secrets["connections"]["gsheets"]
+        
+        # O SEGREDO: Vamos limpar a chave privada manualmente aqui no código
+        raw_key = creds["private_key"]
+        fixed_key = raw_key.replace("\\n", "\n") # Troca o texto \n por uma quebra de linha real
+        
+        # Criar uma conexão manual mais robusta
+        conn = st.connection("gsheets", 
+                            type=GSheetsConnection,
+                            spreadsheet=creds["spreadsheet"],
+                            project_id=creds["project_id"],
+                            private_key_id=creds["private_key_id"],
+                            private_key=fixed_key,
+                            client_email=creds["client_email"],
+                            client_id=creds["client_id"])
+        
         return conn.read(ttl="0s"), conn
     except Exception as e:
-        # Se falhar, avisa o usuário mas não trava o site
-        st.sidebar.error(f"⚠️ Erro nos Secrets: {e}")
+        st.sidebar.warning(f"⚙️ Modo Offline (Backup Manual Ativo)")
+        # Se falhar, retorna vazio para não travar o app
         return pd.DataFrame(columns=["Data", "Ativo", "Tipo", "Volume", "Entrada", "Saída", "SL", "TP", "Lucro", "Obs"]), None
 
-df, conn = get_data()
+df_cloud, conn = get_connection()
 
 # Inicializa o dataframe na sessão
 if 'df_trades' not in st.session_state:
-    st.session_state.df_trades = df
+    st.session_state.df_trades = df_cloud
 
 if 'last_asset' not in st.session_state:
     st.session_state.last_asset = "USDJPY"
@@ -46,6 +61,7 @@ with st.sidebar:
     if not st.session_state.df_trades.empty:
         csv_data = st.session_state.df_trades.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Baixar Backup Manual", csv_data, "backup_trades.csv", "text/csv")
+    
     uploaded_file = st.file_uploader("📂 Restaurar Backup", type="csv")
     if uploaded_file:
         try:
@@ -53,9 +69,9 @@ with st.sidebar:
             st.success("Backup carregado!")
         except: st.error("Arquivo inválido.")
 
-# 4. PROCESSAMENTO DE MÉTRICAS
+# 4. PROCESSAMENTO
 current_df = st.session_state.df_trades
-# Garantir colunas
+# Garantir colunas básicas
 for col in ["Lucro", "Entrada", "SL", "Volume"]:
     if col not in current_df.columns: current_df[col] = 0
 
@@ -86,7 +102,7 @@ with tab1:
     else: st.warning("Sem dados.")
 
 with tab2:
-    st.header("📚 Insights")
+    st.header("📚 Resumo Inteligente")
     if not current_df.empty:
         st.markdown(f"<div class='insight-card'><h4>Ritmo de Ganhos</h4><p>Seu lucro total é de $ {total_profit:,.2f}.</p></div>", unsafe_allow_html=True)
     else: st.info("Registre trades para ver os insights.")
@@ -116,4 +132,4 @@ with tab4:
                 except Exception as e:
                     st.error(f"❌ Erro ao sincronizar: {e}")
             else:
-                st.warning("⚠️ Dados salvos apenas nesta sessão (Secrets não configurados).")
+                st.warning("⚠️ Dados salvos apenas nesta sessão (Modo Offline).")
