@@ -20,27 +20,46 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. CONEXÃO ULTRA-ROBUSTA (AUTO-CORRETORA)
+# 2. CONEXÃO ULTRA-FLEXÍVEL
 def get_gspread_client():
     try:
-        if "google_service_account_json" not in st.secrets:
-            return None, "Secret 'google_service_account_json' não encontrado."
+        # Tenta encontrar o JSON em diferentes formatos possíveis nos Secrets
+        json_data = None
+        if "google_service_account_json" in st.secrets:
+            json_data = st.secrets["google_service_account_json"]
+        elif "gcp_service_account" in st.secrets:
+            json_data = st.secrets["gcp_service_account"]
             
-        json_string = st.secrets["google_service_account_json"].strip()
-        
-        # AUTO-CORREÇÃO: Garante que o JSON tenha as chaves { }
-        if not json_string.startswith("{"): json_string = "{" + json_string
-        if not json_string.endswith("}"): json_string = json_string + "}"
+        if not json_data:
+            return None, "Configuração do Google (JSON) não encontrada nos Secrets."
             
-        creds_dict = json.loads(json_string)
+        # Se for um dicionário (formatado pelo Streamlit), converte pra string e limpa
+        if isinstance(json_data, (dict, st.runtime.secrets.AttrDict)):
+            creds_dict = dict(json_data)
+            if "private_key" in creds_dict:
+                creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+        else:
+            # Se for string, tenta limpar e carregar
+            json_string = json_data.strip()
+            if not json_string.startswith("{"): json_string = "{" + json_string
+            if not json_string.endswith("}"): json_string = json_string + "}"
+            creds_dict = json.loads(json_string)
+            if "private_key" in creds_dict:
+                creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+
         scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
         creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
         client = gspread.authorize(creds)
         
-        if "spreadsheet_url" not in st.secrets:
-            return None, "Secret 'spreadsheet_url' não encontrado."
+        # Procura o link da planilha
+        url = None
+        if "spreadsheet_url" in st.secrets: url = st.secrets["spreadsheet_url"]
+        elif "spreadsheet" in st.secrets: url = st.secrets["spreadsheet"]
+        
+        if not url:
+            return None, "Link da planilha (spreadsheet_url) não encontrado nos Secrets."
             
-        sheet = client.open_by_url(st.secrets["spreadsheet_url"]).sheet1
+        sheet = client.open_by_url(url).sheet1
         return sheet, None
     except Exception as e:
         return None, str(e)
@@ -71,7 +90,7 @@ with st.sidebar:
     else:
         st.warning("⚠️ Modo Offline")
         if error_msg:
-            st.error(f"Erro de Conexão: {error_msg}")
+            st.error(f"Detalhe: {error_msg}")
     
     st.session_state.capital_inicial = st.number_input("Capital Inicial (USD)", value=20.0)
     st.divider()
