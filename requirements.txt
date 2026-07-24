@@ -1,4 +1,7 @@
 streamlit
-google-cloud-firestore
 pandas
+plotly
+numpy
+google-cloud-firestore
+google-auth
 
