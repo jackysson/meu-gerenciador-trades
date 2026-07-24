@@ -6,7 +6,7 @@ import numpy as np
 from streamlit_gsheets import GSheetsConnection
 
 # 1. CONFIGURAÇÃO DA PÁGINA
-st.set_page_config(page_title="Trader Analytics Pro", page_icon="📊", layout="wide" )
+st.set_page_config(page_title="Trader Analytics Pro", page_icon="📊", layout="wide")
 
 st.markdown("""
     <style>
@@ -22,11 +22,11 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 def load_data():
     try:
-        # Puxa o link diretamente dos secrets para evitar o erro de 'missing argument'
-        url = st.secrets["connections"]["gsheets"]["spreadsheet"]
-        return conn.read(spreadsheet=url, ttl="0s")
+        # Tenta carregar os dados. A biblioteca cuida dos segredos automaticamente
+        return conn.read(ttl="0s")
     except Exception as e:
-        st.sidebar.error(f"Aguardando configuração: {e}")
+        # Se der erro, mostra uma instrução amigável na lateral
+        st.sidebar.warning("⚙️ Configurando conexão com a nuvem...")
         return pd.DataFrame(columns=["Data", "Ativo", "Tipo", "Volume", "Entrada", "Saída", "SL", "TP", "Lucro", "Obs"])
 
 # Inicializa o dataframe na sessão
@@ -46,31 +46,20 @@ with st.sidebar:
         st.download_button("📥 Baixar Backup Manual", csv_data, "backup_trades.csv", "text/csv")
     uploaded_file = st.file_uploader("📂 Restaurar Backup", type="csv")
     if uploaded_file:
-        st.session_state.df_trades = pd.read_csv(uploaded_file)
-        st.success("Backup carregado!")
+        try:
+            st.session_state.df_trades = pd.read_csv(uploaded_file)
+            st.success("Backup carregado!")
+        except: st.error("Arquivo inválido.")
 
 # 4. PROCESSAMENTO
 df = st.session_state.df_trades
-# Garantir que as colunas existam antes de processar
 for col in ["Lucro", "Entrada", "SL", "Volume"]:
     if col not in df.columns: df[col] = 0
 df["Lucro"] = pd.to_numeric(df["Lucro"], errors='coerce').fillna(0)
 df["Entrada"] = pd.to_numeric(df["Entrada"], errors='coerce').fillna(0)
 df["SL"] = pd.to_numeric(df["SL"], errors='coerce').fillna(0)
 
-def calc_risk(row):
-    try:
-        if row["Entrada"] != 0 and row["SL"] != 0:
-            pts = abs(row["Entrada"] - row["SL"])
-            cash = pts * float(row["Volume"]) * 1000.0
-            return pts, cash
-    except: pass
-    return 0, 0
-
 if not df.empty:
-    df[["SL_Pts", "SL_Cash"]] = df.apply(lambda r: pd.Series(calc_risk(r)), axis=1)
-    avg_sl_pts = df[df["SL_Pts"] > 0]["SL_Pts"].mean() if not df[df["SL_Pts"] > 0].empty else 0
-    avg_sl_cash = df[df["SL_Cash"] > 0]["SL_Cash"].mean() if not df[df["SL_Cash"] > 0].empty else 0
     total_profit = df["Lucro"].sum()
     wins_df = df[df["Lucro"] > 0]
     loss_df = df[df["Lucro"] < 0]
@@ -78,7 +67,7 @@ if not df.empty:
     wr = (n_wins / len(df) * 100) if len(df) > 0 else 0
     pf = (wins_df["Lucro"].sum() / abs(loss_df["Lucro"].sum())) if abs(loss_df["Lucro"].sum()) > 0 else 0
 else:
-    avg_sl_pts = avg_sl_cash = total_profit = n_wins = n_losses = wr = pf = 0
+    total_profit = n_wins = n_losses = wr = pf = 0
 
 equity = st.session_state.capital_inicial + total_profit
 
@@ -98,12 +87,8 @@ tab1, tab2, tab3, tab4 = st.tabs(["🚀 Gráficos", "📚 Insights", "📝 Hist�
 
 with tab1:
     if not df.empty:
-        col_a, col_b = st.columns(2)
-        with col_a:
-            equity_curve = np.cumsum([st.session_state.capital_inicial] + df["Lucro"].tolist())
-            st.plotly_chart(px.area(x=range(len(equity_curve)), y=equity_curve, title="Crescimento", template="plotly_dark"), use_container_width=True)
-        with col_b:
-            st.plotly_chart(px.bar(df, x=df.index, y="SL_Cash", title="Risco Planejado ($)", color_discrete_sequence=['#f85149'], template="plotly_dark"), use_container_width=True)
+        equity_curve = np.cumsum([st.session_state.capital_inicial] + df["Lucro"].tolist())
+        st.plotly_chart(px.area(x=range(len(equity_curve)), y=equity_curve, title="Crescimento", template="plotly_dark"), use_container_width=True)
     else: st.warning("Sem dados.")
 
 with tab2:
@@ -119,14 +104,13 @@ with tab3:
     if st.button("🗑️ Limpar Tudo"):
         st.session_state.df_trades = pd.DataFrame(columns=df.columns)
         try:
-            url = st.secrets["connections"]["gsheets"]["spreadsheet"]
-            conn.update(spreadsheet=url, data=st.session_state.df_trades)
+            conn.update(data=st.session_state.df_trades)
             st.rerun()
-        except: st.error("Erro ao limpar na nuvem.")
+        except Exception as e: st.error(f"Erro ao salvar: {e}")
 
 with tab4:
     with st.form("add_trade", clear_on_submit=True):
-        st.subheader("Registrar Nova Operação")
+        st.subheader("Registrar Operação")
         r1, r2, r3, r4 = st.columns(4)
         ativo = r1.text_input("Ativo", value=st.session_state.last_asset)
         tipo = r2.selectbox("Tipo", ["buy", "sell"])
@@ -143,8 +127,7 @@ with tab4:
             novo = pd.DataFrame([{"Data": datetime.now().strftime("%Y-%m-%d"), "Ativo": ativo, "Tipo": tipo, "Volume": vol, "Entrada": p_in, "Saída": p_out, "SL": sl, "TP": tp, "Lucro": lucro, "Obs": ""}])
             st.session_state.df_trades = pd.concat([st.session_state.df_trades, novo], ignore_index=True)
             try:
-                url = st.secrets["connections"]["gsheets"]["spreadsheet"]
-                conn.update(spreadsheet=url, data=st.session_state.df_trades)
+                conn.update(data=st.session_state.df_trades)
                 st.success("✅ SALVO NA NUVEM!")
                 st.rerun()
             except Exception as e:
