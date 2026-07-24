@@ -5,23 +5,24 @@ import plotly.graph_objects as go
 from datetime import datetime
 import numpy as np
 
-# 1. CONFIGURAÇÃO DA PÁGINA E ESTILO VISUAL
-st.set_page_config(page_title="Gerenciador de Trades Pro", page_icon="📈", layout="wide")
+# 1. CONFIGURAÇÃO DA PÁGINA E TEMA DARK FORÇADO
+st.set_page_config(page_title="Trader Strategy Analytics", page_icon="📊", layout="wide")
 
+# CSS para garantir o modo Dark e melhorar o visual dos cards
 st.markdown("""
     <style>
-    .main { background-color: #0d1117; }
-    div[data-testid="stMetricValue"] { font-size: 24px; font-weight: bold; }
-    .stMetric { background-color: #161b22; padding: 15px; border-radius: 10px; border: 1px solid #30363d; }
+    .main { background-color: #0d1117; color: #e6edf3; }
+    [data-testid="stMetricValue"] { font-size: 28px !important; color: #58a6ff !important; }
+    .stMetric { background-color: #161b22; padding: 20px; border-radius: 12px; border: 1px solid #30363d; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+    .stTabs [data-baseweb="tab-list"] { gap: 24px; }
+    .stTabs [data-baseweb="tab"] { height: 50px; white-space: pre; background-color: #161b22; border-radius: 8px 8px 0 0; gap: 1px; }
     </style>
     """, unsafe_allow_html=True)
 
 # 2. INICIALIZAÇÃO DOS DADOS
 if 'trades' not in st.session_state:
     st.session_state.trades = pd.DataFrame(columns=[
-        "Data Abertura", "Ativo", "Bilhete", "Tipo", "Volume",
-        "Preço Entrada", "S/L", "T/P", "Data Fechamento",
-        "Preço Fechamento", "Lucro", "Mudança %", "Observação"
+        "Data", "Ativo", "Tipo", "Volume", "Entrada", "Saída", "Lucro", "Obs"
     ])
 
 if 'capital_inicial' not in st.session_state:
@@ -29,93 +30,115 @@ if 'capital_inicial' not in st.session_state:
 
 # 3. BARRA LATERAL
 with st.sidebar:
-    st.title("⚙️ Configurações")
-    st.session_state.capital_inicial = st.number_input("Capital Inicial (USD)", value=st.session_state.capital_inicial)
+    st.title("🛡️ Gestão de Risco")
+    st.session_state.capital_inicial = st.number_input("Capital Atual (USD)", value=st.session_state.capital_inicial)
     st.divider()
     
-    # Upload/Download
-    uploaded_file = st.file_uploader("Importar Histórico (CSV)", type="csv")
-    if uploaded_file:
-        try:
-            df_up = pd.read_csv(uploaded_file)
-            st.session_state.trades = df_up
-            st.success("Dados carregados!")
-        except: st.error("Erro ao ler arquivo.")
-    
+    # Exportar/Importar
     if not st.session_state.trades.empty:
         csv = st.session_state.trades.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Exportar Dados (CSV)", csv, "meus_trades.csv", "text/csv")
+        st.download_button("📥 Baixar Backup (CSV)", csv, "meus_trades.csv", "text/csv")
+    
+    uploaded_file = st.file_uploader("Upload de Backup", type="csv")
+    if uploaded_file:
+        st.session_state.trades = pd.read_csv(uploaded_file)
+        st.rerun()
 
-# 4. DASHBOARD DE ESTATÍSTICAS (CARDS)
-st.title("📈 Gerenciador de Trades Pro")
-
+# 4. PROCESSAMENTO DE MÉTRICAS
+st.title("📊 Trader Strategy Analytics")
 df = st.session_state.trades
 df["Lucro"] = pd.to_numeric(df["Lucro"], errors='coerce').fillna(0)
+
 total_profit = df["Lucro"].sum()
 equity = st.session_state.capital_inicial + total_profit
-wins = len(df[df["Lucro"] > 0])
-losses = len(df[df["Lucro"] < 0])
-wr = (wins / len(df) * 100) if len(df) > 0 else 0
+wins_df = df[df["Lucro"] > 0]
+loss_df = df[df["Lucro"] < 0]
+total_trades = len(df)
+n_wins = len(wins_df)
+n_losses = len(loss_df)
 
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Equity Atual", f"$ {equity:,.2f}")
-c2.metric("Lucro Total", f"$ {total_profit:,.2f}", delta=f"{total_profit:,.2f}")
-c3.metric("Win Rate", f"{wr:.1f}%")
-c4.metric("Total Trades", len(df))
+wr = (n_wins / total_trades * 100) if total_trades > 0 else 0
+avg_win = wins_df["Lucro"].mean() if n_wins > 0 else 0
+avg_loss = abs(loss_df["Lucro"].mean()) if n_losses > 0 else 1e-9
+profit_factor = (wins_df["Lucro"].sum() / abs(loss_df["Lucro"].sum())) if abs(loss_df["Lucro"].sum()) > 0 else 0
 
-# 5. ABAS PRINCIPAIS
-tab1, tab2, tab3 = st.tabs(["📊 Dashboard Visual", "📝 Lista de Trades", "➕ Registrar Operação"])
+# 5. LAYOUT DE CARDS
+c1, c2, c3, c4, c5 = st.columns(5)
+c1.metric("💰 Equity", f"$ {equity:,.2f}")
+c2.metric("✅ Vitórias", n_wins)
+c3.metric("❌ Derrotas", n_losses)
+c4.metric("🎯 Win Rate", f"{wr:.1f}%")
+c5.metric("📈 Profit Factor", f"{profit_factor:.2f}")
+
+st.divider()
+
+# 6. ABAS
+tab1, tab2, tab3 = st.tabs(["🚀 Análise & Projeção", "📝 Histórico", "➕ Novo Trade"])
 
 with tab1:
-    if not df.empty:
-        col_a, col_b = st.columns([2, 1])
-        with col_a:
-            # Curva de Equity
+    if total_trades > 0:
+        col_left, col_right = st.columns([2, 1])
+        
+        with col_left:
+            # Gráfico de Equity
             equity_curve = np.cumsum([st.session_state.capital_inicial] + df["Lucro"].tolist())
-            fig_eq = px.area(x=range(len(equity_curve)), y=equity_curve, title="Curva de Patrimônio", labels={'x':'Trades','y':'USD'})
-            fig_eq.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)')
+            fig_eq = px.area(x=range(len(equity_curve)), y=equity_curve, title="Crescimento da Conta", labels={'x':'Trades','y':'Capital USD'})
+            fig_eq.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig_eq, use_container_width=True)
-        
-        with col_b:
-            # Win Rate Pie
-            fig_pie = px.pie(values=[wins, losses], names=['Wins', 'Losses'], title="Win Rate", color_discrete_sequence=['#3fb950', '#f85149'], hole=0.4)
-            fig_pie.update_layout(template="plotly_dark")
-            st.plotly_chart(fig_pie, use_container_width=True)
-        
-        # Barras de Lucro
-        fig_bar = px.bar(df, x=df.index, y="Lucro", color="Lucro", color_continuous_scale=['#f85149', '#3fb950'], title="Resultado por Operação")
-        fig_bar.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)')
-        st.plotly_chart(fig_bar, use_container_width=True)
+            
+        with col_right:
+            # Projeção de Ganhos
+            st.subheader("🔮 Projeção (30 dias)")
+            # Cálculo de taxa diária aproximada
+            trades_por_dia = total_trades / max(len(df["Data"].unique()), 1)
+            media_por_trade = total_profit / total_trades
+            ganho_diario_estimado = trades_por_dia * media_por_trade
+            
+            p30 = equity + (ganho_diario_estimado * 30)
+            p60 = equity + (ganho_diario_estimado * 60)
+            p90 = equity + (ganho_diario_estimado * 90)
+            
+            st.write(f"Se mantiver o ritmo de **{trades_por_dia:.1f} trades/dia**:")
+            st.info(f"📅 30 dias: **$ {p30:,.2f}**")
+            st.info(f"📅 60 dias: **$ {p60:,.2f}**")
+            st.info(f"📅 90 dias: **$ {p90:,.2f}**")
+            
+            if profit_factor > 1:
+                st.success("Sua estratégia é matematicamente vencedora! 🟢")
+            else:
+                st.error("Atenção: Estratégia com expectativa negativa. 🔴")
+
+        # Gráfico de Distribuição de Lucros/Perdas
+        fig_dist = px.histogram(df, x="Lucro", color=df["Lucro"] > 0, 
+                               title="Distribuição de Resultados",
+                               color_discrete_map={True: "#3fb950", False: "#f85149"},
+                               labels={'Lucro':'Resultado USD', 'count':'Frequência'})
+        fig_dist.update_layout(template="plotly_dark", showlegend=False)
+        st.plotly_chart(fig_dist, use_container_width=True)
     else:
-        st.info("Registre trades para ver os gráficos.")
+        st.warning("Aguardando dados para gerar análise estratégica.")
 
 with tab2:
-    st.dataframe(df, use_container_width=True)
-    if st.button("Limpar Histórico"):
+    st.dataframe(df.sort_index(ascending=False), use_container_width=True)
+    if st.button("🗑️ Resetar Tudo"):
         st.session_state.trades = pd.DataFrame(columns=df.columns)
         st.rerun()
 
 with tab3:
-    with st.form("add_trade", clear_on_submit=True):
-        ca, cb, cc = st.columns(3)
-        ativo = ca.text_input("Ativo")
-        tipo = cb.selectbox("Tipo", ["buy", "sell"])
-        vol = cc.number_input("Volume", value=0.01)
+    with st.form("form_add", clear_on_submit=True):
+        st.subheader("Registrar Nova Operação")
+        c1, c2, c3 = st.columns(3)
+        ativo = c1.text_input("Ativo (ex: USDJPY)")
+        tipo = c2.selectbox("Tipo", ["buy", "sell"])
+        lucro = c3.number_input("Resultado Final (USD)", format="%.2f", help="Use negativo para perdas")
         
-        cd, ce, cf = st.columns(3)
-        p_in = cd.number_input("Preço Entrada", format="%.5f")
-        p_out = ce.number_input("Preço Fechamento", format="%.5f")
-        lucro_manual = cf.number_input("Lucro (USD)", format="%.2f")
+        obs = st.text_input("Nota Mental (O que aconteceu?)")
         
-        obs = st.text_input("Observação")
-        
-        if st.form_submit_button("💾 Salvar Operação"):
+        if st.form_submit_button("💾 Salvar Trade"):
             novo = pd.DataFrame([{
-                "Data Abertura": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                "Ativo": ativo, "Tipo": tipo, "Volume": vol,
-                "Preço Entrada": p_in, "Preço Fechamento": p_out, 
-                "Lucro": lucro_manual, "Observação": obs
+                "Data": datetime.now().strftime("%Y-%m-%d"),
+                "Ativo": ativo, "Tipo": tipo, "Lucro": lucro, "Obs": obs
             }])
             st.session_state.trades = pd.concat([st.session_state.trades, novo], ignore_index=True)
-            st.success("Trade salvo!")
+            st.success("Registrado!")
             st.rerun()
