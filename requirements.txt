@@ -4,3 +4,5 @@ plotly
 numpy
 google-cloud-firestore
 google-auth
+authlib>=1.3.2
+requests
