@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import numpy as np
-import firebase_admin
+
 
 from datetime import datetime, timezone
 from firebase_admin import credentials, firestore
