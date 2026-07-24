@@ -37,6 +37,20 @@ TRADE_COLUMNS = [
 
 
 # =========================================================
+# VERIFICAR LOGIN (compatível com todas as versões)
+# =========================================================
+
+def check_user_login():
+    try:
+        _ = st.user["sub"]
+        return True
+    except (AttributeError, KeyError):
+        return False
+
+is_user_logged_in = check_user_login()
+
+
+# =========================================================
 # TEMA (DIA / NOITE)
 # =========================================================
 
@@ -123,27 +137,10 @@ def apply_theme(mode):
                 font-size: 14px;
                 margin-bottom: 10px;
             }
-
-            h1, h2, h3, h4, h5, h6, p, span, label, div {
-                color: #1a1a2e !important;
-            }
-
-            .stAlert > div {
-                color: #1a1a2e !important;
-            }
-
-            .stTabs [data-baseweb="tab"] {
-                color: #333333 !important;
-            }
-
-            .stDataFrame {
-                color: #1a1a2e !important;
-            }
             </style>
             """,
             unsafe_allow_html=True,
         )
-
     else:
         st.markdown(
             """
@@ -227,7 +224,7 @@ apply_theme(st.session_state["theme_mode"])
 # LOGIN
 # =========================================================
 
-if not st.user.is_logged_in:
+if not is_user_logged_in:
     st.title("📊 Trader Analytics Pro")
 
     st.markdown(
@@ -241,12 +238,13 @@ if not st.user.is_logged_in:
         "Entre com sua conta Google para acessar seus dados."
     )
 
-    if st.button(
-        "🔐 Entrar com Google",
-        type="primary",
-        use_container_width=True,
-    ):
+    try:
         st.login()
+    except Exception:
+        st.error(
+            "O login ainda não está configurado. "
+            "Verifique os Secrets na seção [auth]."
+        )
 
     st.divider()
 
@@ -263,17 +261,24 @@ if not st.user.is_logged_in:
 # DADOS DO USUÁRIO AUTENTICADO
 # =========================================================
 
-usuario_id = str(st.user["sub"])
-usuario_email = str(
-    st.user.get("email", "")
-).strip().lower()
-usuario_nome = str(
-    st.user.get("name", "Usuário")
-).strip()
+try:
+    usuario_id = str(st.user["sub"])
+    usuario_email = str(
+        st.user.get("email", "")
+    ).strip().lower()
+    usuario_nome = str(
+        st.user.get("name", "Usuário")
+    ).strip()
+except Exception:
+    st.error(
+        "Não foi possível identificar sua conta."
+    )
+    st.stop()
 
 if not usuario_email:
     st.error(
-        "Não foi possível identificar o e-mail da sua conta."
+        "Não foi possível identificar o e-mail "
+        "da sua conta."
     )
     st.stop()
 
@@ -304,7 +309,9 @@ def get_firestore():
     project_id = info.get("project_id", "")
 
     credenciais = (
-        service_account.Credentials.from_service_account_info(
+        service_account
+        .Credentials
+        .from_service_account_info(
             info,
             scopes=[
                 "https://www.googleapis.com/auth/cloud-platform"
@@ -329,7 +336,7 @@ except Exception:
 
 
 # =========================================================
-# FUNÇÕES DO PROPRIETÁRIO E PLANOS
+# FUNÇÕES DOS PLANOS
 # =========================================================
 
 def get_owner_emails():
@@ -345,6 +352,9 @@ def is_owner(email):
 
 
 def ensure_user(user_id, name, email):
+    if db is None:
+        return {}
+
     user_ref = db.collection("users").document(user_id)
     document = user_ref.get()
 
@@ -363,13 +373,7 @@ def ensure_user(user_id, name, email):
             }
         )
 
-        return {
-            "plan": "free",
-            "access_type": "free",
-            "subscription_status": "inactive",
-            "subscription_expires_at": None,
-            "trade_count": 0,
-        }
+        return {"trade_count": 0}
 
     current_data = document.to_dict()
 
@@ -404,15 +408,21 @@ def normalize_expiration(expiration):
 
     if isinstance(expiration, datetime):
         if expiration.tzinfo is None:
-            return expiration.replace(tzinfo=timezone.utc)
+            return expiration.replace(
+                tzinfo=timezone.utc
+            )
         return expiration
 
     if isinstance(expiration, str):
         try:
-            normalized = expiration.replace("Z", "+00:00")
+            normalized = expiration.replace(
+                "Z", "+00:00"
+            )
             parsed = datetime.fromisoformat(normalized)
             if parsed.tzinfo is None:
-                parsed = parsed.replace(tzinfo=timezone.utc)
+                parsed = parsed.replace(
+                    tzinfo=timezone.utc
+                )
             return parsed
         except ValueError:
             return None
@@ -468,7 +478,9 @@ def get_plan_information(user_id, email):
             "is_owner": owner,
             "is_pro": owner,
             "plan": "pro" if owner else "free",
-            "access_type": "owner" if owner else "free",
+            "access_type": (
+                "owner" if owner else "free"
+            ),
             "subscription_status": (
                 "owner" if owner else "inactive"
             ),
@@ -483,7 +495,9 @@ def get_plan_information(user_id, email):
     )
 
     data = (
-        document.to_dict() if document.exists else {}
+        document.to_dict()
+        if document.exists
+        else {}
     )
     pro_access = has_pro_access(user_id, email)
 
@@ -491,14 +505,21 @@ def get_plan_information(user_id, email):
         "is_owner": owner,
         "is_pro": pro_access,
         "plan": data.get("plan", "free"),
-        "access_type": data.get("access_type", "free"),
+        "access_type": data.get(
+            "access_type", "free"
+        ),
         "subscription_status": data.get(
             "subscription_status", "inactive"
         ),
-        "subscription_expires_at": normalize_expiration(
-            data.get("subscription_expires_at")
+        "subscription_expires_at":
+            normalize_expiration(
+                data.get(
+                    "subscription_expires_at"
+                )
+            ),
+        "trade_count": int(
+            data.get("trade_count", 0)
         ),
-        "trade_count": int(data.get("trade_count", 0)),
     }
 
 
@@ -514,7 +535,7 @@ def load_trades(user_id):
         db.collection("users")
         .document(user_id)
         .collection("trades")
-        .order_by("created_at", direction="ASCENDING")
+        .order_by("created_at")
     )
 
     records = []
@@ -529,7 +550,9 @@ def load_trades(user_id):
             )
         else:
             formatted_date = (
-                str(created_at) if created_at else ""
+                str(created_at)
+                if created_at
+                else ""
             )
 
         records.append(
@@ -548,17 +571,27 @@ def load_trades(user_id):
             }
         )
 
-    return pd.DataFrame(records, columns=TRADE_COLUMNS)
+    return pd.DataFrame(
+        records,
+        columns=TRADE_COLUMNS,
+    )
 
 
 def save_trade(user_id, email, trade_data):
     if not user_id:
-        raise ValueError("Usuário não autenticado.")
+        raise ValueError(
+            "Usuário não autenticado."
+        )
 
     if db is None:
-        raise RuntimeError("Banco de dados indisponível.")
+        raise RuntimeError(
+            "Banco de dados indisponível."
+        )
 
-    user_ref = db.collection("users").document(user_id)
+    user_ref = (
+        db.collection("users")
+        .document(user_id)
+    )
     user_snapshot = user_ref.get()
 
     if not user_snapshot.exists:
@@ -567,7 +600,9 @@ def save_trade(user_id, email, trade_data):
         )
 
     user_data = user_snapshot.to_dict()
-    current_count = int(user_data.get("trade_count", 0))
+    current_count = int(
+        user_data.get("trade_count", 0)
+    )
 
     pro_access = has_pro_access(user_id, email)
 
@@ -615,10 +650,14 @@ def save_trade(user_id, email, trade_data):
 
 def edit_trade(user_id, trade_id, trade_data):
     if not user_id or not trade_id:
-        raise ValueError("Usuário ou trade inválido.")
+        raise ValueError(
+            "Usuário ou trade inválido."
+        )
 
     if db is None:
-        raise RuntimeError("Banco de dados indisponível.")
+        raise RuntimeError(
+            "Banco de dados indisponível."
+        )
 
     reference = (
         db.collection("users")
@@ -647,12 +686,19 @@ def edit_trade(user_id, trade_id, trade_data):
 
 def delete_trade(user_id, trade_id):
     if not user_id or not trade_id:
-        raise ValueError("Usuário ou trade inválido.")
+        raise ValueError(
+            "Usuário ou trade inválido."
+        )
 
     if db is None:
-        raise RuntimeError("Banco de dados indisponível.")
+        raise RuntimeError(
+            "Banco de dados indisponível."
+        )
 
-    user_ref = db.collection("users").document(user_id)
+    user_ref = (
+        db.collection("users")
+        .document(user_id)
+    )
     trade_ref = (
         user_ref.collection("trades")
         .document(trade_id)
@@ -701,12 +747,16 @@ def load_initial_capital(user_id):
         return 20.0
 
     data = document.to_dict()
-    return float(data.get("initial_capital", 20.0))
+    return float(
+        data.get("initial_capital", 20.0)
+    )
 
 
 def save_initial_capital(user_id, capital):
     if db is None:
-        raise RuntimeError("Banco de dados indisponível.")
+        raise RuntimeError(
+            "Banco de dados indisponível."
+        )
 
     (
         db.collection("users")
@@ -716,7 +766,8 @@ def save_initial_capital(user_id, capital):
         .set(
             {
                 "initial_capital": float(capital),
-                "updated_at": firestore.SERVER_TIMESTAMP,
+                "updated_at":
+                    firestore.SERVER_TIMESTAMP,
             },
             merge=True,
         )
@@ -743,91 +794,73 @@ def calculate_badges(dataframe):
     )
 
     if total >= 10:
-        badges.append(
-            {
-                "icon": "📝",
-                "name": "Diário Iniciado",
-                "description": (
-                    "Registrou pelo menos 10 operações."
-                ),
-            }
-        )
+        badges.append({
+            "icon": "📝",
+            "name": "Diário Iniciado",
+            "description": (
+                "Registrou pelo menos 10 operações."
+            ),
+        })
 
     if total >= 50:
-        badges.append(
-            {
-                "icon": "🏅",
-                "name": "Trader Consistente",
-                "description": (
-                    "Registrou pelo menos 50 operações."
-                ),
-            }
-        )
+        badges.append({
+            "icon": "🏅",
+            "name": "Trader Consistente",
+            "description": (
+                "Registrou pelo menos 50 operações."
+            ),
+        })
 
     if total >= 100:
-        badges.append(
-            {
-                "icon": "🔥",
-                "name": "Centúria",
-                "description": (
-                    "Registrou pelo menos 100 operações."
-                ),
-            }
-        )
+        badges.append({
+            "icon": "🔥",
+            "name": "Centúria",
+            "description": (
+                "Registrou pelo menos 100 operações."
+            ),
+        })
 
     if total >= 20 and win_rate >= 60:
-        badges.append(
-            {
-                "icon": "🎯",
-                "name": "Alta Precisão",
-                "description": (
-                    "Win rate de pelo menos 60% "
-                    "em 20 operações."
-                ),
-            }
-        )
+        badges.append({
+            "icon": "🎯",
+            "name": "Alta Precisão",
+            "description": (
+                "Win rate de pelo menos 60% em 20 operações."
+            ),
+        })
 
     if total >= 20 and win_rate >= 70:
-        badges.append(
-            {
-                "icon": "👑",
-                "name": "Mestre da Precisão",
-                "description": (
-                    "Win rate de pelo menos 70% "
-                    "em 20 operações."
-                ),
-            }
-        )
+        badges.append({
+            "icon": "👑",
+            "name": "Mestre da Precisão",
+            "description": (
+                "Win rate de pelo menos 70% em 20 operações."
+            ),
+        })
 
     if total >= 20 and total_profit > 0:
-        badges.append(
-            {
-                "icon": "📈",
-                "name": "Histórico Positivo",
-                "description": (
-                    "Resultado acumulado positivo "
-                    "após 20 operações."
-                ),
-            }
-        )
+        badges.append({
+            "icon": "📈",
+            "name": "Histórico Positivo",
+            "description": (
+                "Resultado acumulado positivo após 20 operações."
+            ),
+        })
 
     if total >= 50 and total_profit > 0:
-        badges.append(
-            {
-                "icon": "💎",
-                "name": "Resultados Sólidos",
-                "description": (
-                    "Resultado positivo após "
-                    "50 operações."
-                ),
-            }
-        )
+        badges.append({
+            "icon": "💎",
+            "name": "Resultados Sólidos",
+            "description": (
+                "Resultado positivo após 50 operações."
+            ),
+        })
 
     return badges
 
 
 # =========================================================
-# INICIALIZAR USUÁRIO E SESSÃO
+# INICIALIZAR SESSÃO
 # =========================================================
 
 if cloud_connected and db is not None:
@@ -838,34 +871,36 @@ if cloud_connected and db is not None:
             usuario_email,
         )
     except Exception:
-        st.error(
-            "Não foi possível inicializar sua conta."
+        st.warning(
+            "Não foi possível criar seu perfil."
         )
-        st.stop()
-else:
-    st.warning(
-        "Modo offline: os dados não serão "
-        "salvos permanentemente."
-    )
 
 
-if st.session_state.get("active_user_id") != usuario_id:
+if st.session_state.get(
+    "active_user_id"
+) != usuario_id:
     st.session_state["active_user_id"] = usuario_id
     st.session_state.pop("df_trades", None)
-    st.session_state.pop("initial_capital", None)
+    st.session_state.pop(
+        "initial_capital", None
+    )
     st.session_state.pop("last_asset", None)
-    st.session_state.pop("editing_trade_id", None)
-    st.session_state.pop("confirm_delete_id", None)
+    st.session_state.pop(
+        "editing_trade_id", None
+    )
+    st.session_state.pop(
+        "confirm_delete_id", None
+    )
 
 
 if "df_trades" not in st.session_state:
     try:
-        st.session_state["df_trades"] = load_trades(
-            usuario_id
+        st.session_state["df_trades"] = (
+            load_trades(usuario_id)
         )
     except Exception:
-        st.session_state["df_trades"] = pd.DataFrame(
-            columns=TRADE_COLUMNS
+        st.session_state["df_trades"] = (
+            pd.DataFrame(columns=TRADE_COLUMNS)
         )
         st.error(
             "Não foi possível carregar seus trades."
@@ -901,7 +936,9 @@ owner = plan_info["is_owner"]
 
 
 if "flash_message" in st.session_state:
-    st.success(st.session_state.pop("flash_message"))
+    st.success(
+        st.session_state.pop("flash_message")
+    )
 
 
 # =========================================================
@@ -909,7 +946,6 @@ if "flash_message" in st.session_state:
 # =========================================================
 
 with st.sidebar:
-    # TEMA
     theme_choice = st.radio(
         "🎨 Aparência",
         ["🌙 Noite", "☀️ Dia"],
@@ -923,7 +959,6 @@ with st.sidebar:
 
     st.divider()
 
-    # CONEXÃO COM A NUVEM
     st.subheader("☁️ Status da Conexão")
 
     if cloud_connected:
@@ -948,14 +983,12 @@ with st.sidebar:
             unsafe_allow_html=True,
         )
         st.caption(
-            "Os dados não estão sendo salvos na nuvem."
+            "Dados não estão sendo salvos na nuvem."
         )
 
     st.divider()
 
-    # CONTA
     st.subheader("👤 Minha conta")
-
     st.write(usuario_nome)
     st.caption(usuario_email)
 
@@ -963,29 +996,24 @@ with st.sidebar:
         st.success(
             "🛡️ Desenvolvedor — Pro permanente"
         )
-
     elif is_pro:
         st.success(
             "⭐ Plano Pro — R$ 29,90/mês"
         )
-
         expiration = plan_info.get(
             "subscription_expires_at"
         )
-
         if expiration:
             st.caption(
                 f"Acesso até "
                 f"{expiration.strftime('%d/%m/%Y')}."
             )
-
     else:
         st.info("🆓 Plano Gratuito")
         st.caption("Limite de 10 trades.")
 
     st.divider()
 
-    # CONTROLE DE TRADES
     current_count = len(
         st.session_state["df_trades"]
     )
@@ -1012,10 +1040,7 @@ with st.sidebar:
         )
 
         if current_count >= FREE_TRADE_LIMIT:
-            st.warning(
-                "Limite gratuito atingido."
-            )
-
+            st.warning("Limite gratuito atingido.")
     else:
         st.caption(
             f"{current_count} trade(s) registrados."
@@ -1023,7 +1048,6 @@ with st.sidebar:
 
     st.divider()
 
-    # CAPITAL INICIAL
     st.subheader("💰 Configuração")
 
     with st.form("capital_form"):
@@ -1031,7 +1055,9 @@ with st.sidebar:
             "Capital Inicial (USD)",
             min_value=0.0,
             value=float(
-                st.session_state["initial_capital"]
+                st.session_state[
+                    "initial_capital"
+                ]
             ),
             step=1.0,
             format="%.2f",
@@ -1051,17 +1077,14 @@ with st.sidebar:
                 st.session_state[
                     "initial_capital"
                 ] = capital_value
-                st.success(
-                    "Capital atualizado!"
-                )
+                st.success("Capital atualizado!")
             except Exception:
                 st.error(
-                    "Não foi possível salvar o capital."
+                    "Não foi possível salvar."
                 )
 
     st.divider()
 
-    # EXPORTAÇÃO
     st.subheader("💾 Exportação")
 
     export_df = st.session_state.get(
@@ -1101,7 +1124,6 @@ with st.sidebar:
 
     st.divider()
 
-    # REDES SOCIAIS
     st.subheader("📱 Conecte-se")
 
     st.markdown(
@@ -1229,7 +1251,7 @@ profit_factor = (
 
 
 # =========================================================
-# DASHBOARD PRINCIPAL
+# DASHBOARD
 # =========================================================
 
 st.title("📊 Trader Strategy Analytics Pro")
@@ -1276,7 +1298,7 @@ st.divider()
 
 
 # =========================================================
-# GRÁFICOS BÁSICOS
+# GRÁFICOS
 # =========================================================
 
 with tab_graphs:
@@ -1284,21 +1306,20 @@ with tab_graphs:
         st.info(
             "Adicione trades para ver os gráficos."
         )
-
     else:
         col_a, col_b = st.columns(2)
 
         with col_a:
-            equity_curve = (
+            eq_curve = (
                 initial_capital
                 + df["Lucro"].cumsum()
             )
 
-            fig_equity = px.area(
+            fig_eq = px.area(
                 x=list(
-                    range(1, len(equity_curve) + 1)
+                    range(1, len(eq_curve) + 1)
                 ),
-                y=equity_curve,
+                y=eq_curve,
                 title="Crescimento da Conta",
                 labels={
                     "x": "Trade",
@@ -1308,14 +1329,15 @@ with tab_graphs:
             )
 
             st.plotly_chart(
-                fig_equity,
+                fig_eq,
                 use_container_width=True,
             )
 
         with col_b:
             risk_df = df.copy()
             risk_df["Risco_Pts"] = abs(
-                risk_df["Entrada"] - risk_df["SL"]
+                risk_df["Entrada"]
+                - risk_df["SL"]
             )
 
             fig_risk = px.bar(
@@ -1323,7 +1345,9 @@ with tab_graphs:
                 x="Ativo",
                 y="Risco_Pts",
                 title="Risco por Trade",
-                color_discrete_sequence=["#f85149"],
+                color_discrete_sequence=[
+                    "#f85149"
+                ],
                 template="plotly_dark",
             )
 
@@ -1395,7 +1419,8 @@ with tab_insights:
 
         st.info(
             "Assine o Plano Pro por R$ 29,90/mês "
-            "para acessar resumos, insights e insígnias."
+            "para acessar resumos, insights e "
+            "insígnias."
         )
 
         st.markdown(
@@ -1417,15 +1442,15 @@ with tab_insights:
 
         if df.empty:
             st.info(
-                "Adicione trades para gerar suas análises."
+                "Adicione trades para gerar "
+                "suas análises."
             )
-
         else:
             st.markdown(
                 f"""
                 <div class="insight-card">
                     <h4>📉 Análise de Perdas</h4>
-                    <p>Perda média em dinheiro: <b>$ {avg_loss_cash:.2f}</b></p>
+                    <p>Perda média: <b>$ {avg_loss_cash:.2f}</b></p>
                     <p>Perda média em pontos: <b>{avg_loss_pts:.3f} pts</b></p>
                 </div>
                 """,
@@ -1437,14 +1462,13 @@ with tab_insights:
                 if len(df) > 0
                 else 0
             )
-
             sim_30 = equity + avg_trade * 30
 
             st.markdown(
                 f"""
                 <div class="insight-card">
                     <h4>🧮 Simulação Estatística</h4>
-                    <p>Projeção baseada na média de 30 trades: <b>$ {sim_30:,.2f}</b></p>
+                    <p>Projeção 30 trades: <b>$ {sim_30:,.2f}</b></p>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -1452,30 +1476,29 @@ with tab_insights:
 
             st.caption(
                 "Simulação baseada em dados históricos. "
-                "Não representa previsão ou garantia de "
+                "Não representa garantia de "
                 "rentabilidade futura."
             )
 
             st.divider()
 
-            st.subheader(
-                "🏆 Minhas Insígnias"
-            )
+            st.subheader("🏆 Minhas Insígnias")
 
             badges = calculate_badges(df)
 
             if not badges:
                 st.info(
-                    "Continue registrando operações "
-                    "para desbloquear insígnias."
+                    "Continue registrando para "
+                    "desbloquear insígnias."
                 )
-
             else:
                 badge_cols = st.columns(
                     min(len(badges), 3)
                 )
 
-                for idx, badge in enumerate(badges):
+                for idx, badge in enumerate(
+                    badges
+                ):
                     col = badge_cols[
                         idx % len(badge_cols)
                     ]
@@ -1494,29 +1517,28 @@ with tab_insights:
 
 
 # =========================================================
-# HISTÓRICO COM EDIÇÃO E EXCLUSÃO
+# HISTÓRICO
 # =========================================================
 
 with tab_history:
     if df.empty:
         st.info("Nenhum trade registrado.")
-
     else:
-        if "confirm_delete_id" in st.session_state:
+        if (
+            "confirm_delete_id"
+            in st.session_state
+        ):
             del_id = st.session_state[
                 "confirm_delete_id"
             ]
 
             st.warning(
-                f"⚠️ Tem certeza que deseja excluir "
-                f"o trade {del_id[:8]}?"
+                f"⚠️ Excluir trade {del_id[:8]}?"
             )
 
-            col_confirm, col_cancel = (
-                st.columns(2)
-            )
+            cc, cx = st.columns(2)
 
-            with col_confirm:
+            with cc:
                 if st.button(
                     "✅ Sim, excluir",
                     type="primary",
@@ -1535,18 +1557,15 @@ with tab_history:
                         ] = load_trades(
                             usuario_id
                         )
-                        st.success(
-                            "Trade excluído!"
-                        )
+                        st.success("Excluído!")
                         st.rerun()
-
                     except Exception:
                         st.error(
                             "Não foi possível "
                             "excluir."
                         )
 
-            with col_cancel:
+            with cx:
                 if st.button(
                     "❌ Cancelar",
                     use_container_width=True,
@@ -1564,10 +1583,10 @@ with tab_history:
         )
 
         if editing_id:
-            trade_row = df[df["id"] == editing_id]
+            t_row = df[df["id"] == editing_id]
 
-            if not trade_row.empty:
-                row = trade_row.iloc[0]
+            if not t_row.empty:
+                row = t_row.iloc[0]
 
                 st.subheader("✏️ Editar Trade")
 
@@ -1576,22 +1595,23 @@ with tab_history:
                         st.columns(4)
                     )
 
-                    edit_asset = e1.text_input(
+                    ed_asset = e1.text_input(
                         "Ativo",
                         value=row["Ativo"],
                     )
 
-                    edit_type = e2.selectbox(
+                    ed_type = e2.selectbox(
                         "Tipo",
                         ["buy", "sell"],
                         index=(
                             0
-                            if row["Tipo"] == "buy"
+                            if row["Tipo"]
+                            == "buy"
                             else 1
                         ),
                     )
 
-                    edit_volume = e3.number_input(
+                    ed_vol = e3.number_input(
                         "Volume",
                         min_value=0.01,
                         value=float(
@@ -1601,7 +1621,7 @@ with tab_history:
                         format="%.2f",
                     )
 
-                    edit_profit = e4.number_input(
+                    ed_profit = e4.number_input(
                         "Lucro",
                         value=float(
                             row["Lucro"]
@@ -1615,7 +1635,7 @@ with tab_history:
                         st.columns(4)
                     )
 
-                    edit_entry = e5.number_input(
+                    ed_entry = e5.number_input(
                         "Entrada",
                         value=float(
                             row["Entrada"]
@@ -1623,7 +1643,7 @@ with tab_history:
                         format="%.3f",
                     )
 
-                    edit_exit = e6.number_input(
+                    ed_exit = e6.number_input(
                         "Saída",
                         value=float(
                             row["Saída"]
@@ -1631,64 +1651,60 @@ with tab_history:
                         format="%.3f",
                     )
 
-                    edit_sl = e7.number_input(
+                    ed_sl = e7.number_input(
                         "SL",
-                        value=float(row["SL"]),
+                        value=float(
+                            row["SL"]
+                        ),
                         format="%.3f",
                     )
 
-                    edit_tp = e8.number_input(
+                    ed_tp = e8.number_input(
                         "TP",
-                        value=float(row["TP"]),
+                        value=float(
+                            row["TP"]
+                        ),
                         format="%.3f",
                     )
 
-                    edit_obs = st.text_area(
+                    ed_obs = st.text_area(
                         "Observação",
                         value=row["Obs"],
                         max_chars=500,
                     )
 
-                    save_edit, cancel_edit = (
+                    s_edit, c_edit = (
                         st.columns(2)
                     )
 
-                    with save_edit:
+                    with s_edit:
                         if st.form_submit_button(
-                            "💾 Salvar Alterações",
+                            "💾 Salvar",
                             type="primary",
                             use_container_width=True,
                         ):
                             try:
-                                trade_data = {
+                                td = {
                                     "asset": (
-                                        edit_asset.strip()
+                                        ed_asset.strip()
                                         .upper()
                                     ),
-                                    "type": edit_type,
-                                    "volume": (
-                                        edit_volume
-                                    ),
-                                    "entry": (
-                                        edit_entry
-                                    ),
-                                    "exit": (
-                                        edit_exit
-                                    ),
-                                    "sl": edit_sl,
-                                    "tp": edit_tp,
-                                    "profit": (
-                                        edit_profit
-                                    ),
+                                    "type": ed_type,
+                                    "volume": ed_vol,
+                                    "entry": ed_entry,
+                                    "exit": ed_exit,
+                                    "sl": ed_sl,
+                                    "tp": ed_tp,
+                                    "profit": ed_profit,
                                     "observation": (
-                                        edit_obs.strip()
+                                        ed_obs.strip()
                                     ),
                                 }
 
                                 edit_trade(
                                     usuario_id,
                                     editing_id,
-                                    trade_data,
+                                    td,
                                 )
 
                                 st.session_state.pop(
@@ -1701,17 +1717,16 @@ with tab_history:
                                     usuario_id
                                 )
                                 st.success(
-                                    "Trade atualizado!"
+                                    "Atualizado!"
                                 )
                                 st.rerun()
 
                             except Exception:
                                 st.error(
-                                    "Não foi possível "
-                                    "salvar."
+                                    "Erro ao salvar."
                                 )
 
-                    with cancel_edit:
+                    with c_edit:
                         if st.form_submit_button(
                             "❌ Cancelar",
                             use_container_width=True,
@@ -1724,16 +1739,15 @@ with tab_history:
 
             st.divider()
 
-        display_df = df.copy()
-
-        display_cols = [
+        d_df = df.copy()
+        d_cols = [
             c
             for c in TRADE_COLUMNS
             if c != "id"
         ]
 
         st.dataframe(
-            display_df[display_cols].sort_index(
+            d_df[d_cols].sort_index(
                 ascending=False
             ),
             use_container_width=True,
@@ -1746,8 +1760,8 @@ with tab_history:
 
         trade_ids = df["id"].tolist()
 
-        selected_trade = st.selectbox(
-            "Selecione o ID do trade",
+        sel_trade = st.selectbox(
+            "Selecione o ID",
             options=trade_ids,
             format_func=lambda x: (
                 f"{x[:8]}..."
@@ -1756,29 +1770,27 @@ with tab_history:
             ),
         )
 
-        if selected_trade:
-            col_edit, col_delete = (
-                st.columns(2)
-            )
+        if sel_trade:
+            ce, cd = st.columns(2)
 
-            with col_edit:
+            with ce:
                 if st.button(
                     "✏️ Editar",
                     use_container_width=True,
                 ):
                     st.session_state[
                         "editing_trade_id"
-                    ] = selected_trade
+                    ] = sel_trade
                     st.rerun()
 
-            with col_delete:
+            with cd:
                 if st.button(
                     "🗑️ Excluir",
                     use_container_width=True,
                 ):
                     st.session_state[
                         "confirm_delete_id"
-                    ] = selected_trade
+                    ] = sel_trade
                     st.rerun()
 
 
@@ -1787,23 +1799,20 @@ with tab_history:
 # =========================================================
 
 with tab_new:
-    current_count = len(df)
-
+    cur_count = len(df)
     free_limit = (
         not is_pro
-        and current_count >= FREE_TRADE_LIMIT
+        and cur_count >= FREE_TRADE_LIMIT
     )
 
     if free_limit:
         st.warning(
-            "Você atingiu o limite de 10 trades "
-            "do plano gratuito."
+            "Limite de 10 trades atingido."
         )
 
         st.info(
-            "No Plano Pro você terá trades "
-            "ilimitados, resumos, insights e "
-            "insígnias por R$ 29,90/mês."
+            "Pro: trades ilimitados por "
+            "R$ 29,90/mês."
         )
 
     else:
@@ -1890,24 +1899,14 @@ with tab_new:
 
                 if volume <= 0:
                     errors.append(
-                        "O volume deve ser maior "
-                        "que zero."
-                    )
-
-                if trade_type not in [
-                    "buy",
-                    "sell",
-                ]:
-                    errors.append(
-                        "Tipo inválido."
+                        "Volume maior que zero."
                     )
 
                 if errors:
-                    for error in errors:
-                        st.error(error)
-
+                    for e in errors:
+                        st.error(e)
                 else:
-                    trade_data = {
+                    td = {
                         "asset": (
                             asset.strip().upper()
                         ),
@@ -1927,7 +1926,7 @@ with tab_new:
                         save_trade(
                             usuario_id,
                             usuario_email,
-                            trade_data,
+                            td,
                         )
 
                         st.session_state[
@@ -1944,20 +1943,16 @@ with tab_new:
 
                         st.session_state[
                             "flash_message"
-                        ] = (
-                            "✅ Trade salvo "
-                            "permanentemente!"
-                        )
+                        ] = "✅ Trade salvo!"
 
                         st.rerun()
 
-                    except PermissionError as error:
-                        st.warning(str(error))
+                    except PermissionError as err:
+                        st.warning(str(err))
 
                     except Exception:
                         st.error(
-                            "Não foi possível salvar. "
-                            "Tente novamente."
+                            "Erro ao salvar."
                         )
 
 
@@ -1968,23 +1963,21 @@ with tab_new:
 with tab_plan:
     st.title("⭐ Planos")
 
-    free_col, pro_col = st.columns(2)
+    fc, pc = st.columns(2)
 
-    with free_col:
+    with fc:
         st.markdown(
             """
             <div class="plan-card">
                 <h2>🆓 Gratuito</h2>
-                <h3>R$ 0</h3>
-                <br>
+                <h3>R$ 0</h3><br>
                 <p>✅ Até 10 trades</p>
                 <p>✅ Métricas básicas</p>
                 <p>✅ Gráficos básicos</p>
                 <p>✅ Histórico</p>
                 <p>✅ Exportação CSV</p>
-                <p>✅ Capital inicial</p>
-                <br>
-                <p>❌ Insights avançados</p>
+                <p>✅ Capital inicial</p><br>
+                <p>❌ Insights</p>
                 <p>❌ Insígnias</p>
                 <p>❌ Gráficos extras</p>
                 <p>❌ Trades ilimitados</p>
@@ -1994,25 +1987,19 @@ with tab_plan:
         )
 
         if not is_pro:
-            st.info(
-                "Seu plano atual: Gratuito"
-            )
+            st.info("Seu plano: Gratuito")
         else:
-            st.caption(
-                "Você já possui acesso Pro."
-            )
+            st.caption("Você já é Pro.")
 
-    with pro_col:
+    with pc:
         st.markdown(
             """
             <div class="plan-card">
                 <h2>⭐ Pro</h2>
-                <h3>R$ 29,90/mês</h3>
-                <br>
+                <h3>R$ 29,90/mês</h3><br>
                 <p>✅ Trades ilimitados</p>
-                <p>✅ Métricas e gráficos</p>
                 <p>✅ Resumos estatísticos</p>
-                <p>✅ Insights de desempenho</p>
+                <p>✅ Insights</p>
                 <p>✅ Análise de perdas</p>
                 <p>✅ Simulações</p>
                 <p>✅ Insígnias</p>
@@ -2025,84 +2012,42 @@ with tab_plan:
 
         if owner:
             st.success(
-                "🛡️ Sua conta de desenvolvedor "
-                "já possui Pro permanente."
+                "🛡️ Pro permanente (dev)."
             )
-
         elif is_pro:
-            st.success(
-                "⭐ Seu Plano Pro está ativo."
-            )
-
+            st.success("⭐ Pro ativo.")
         else:
             st.button(
-                "⭐ Assinar por R$ 29,90/mês",
+                "⭐ Assinar — R$ 29,90/mês",
                 type="primary",
                 use_container_width=True,
                 disabled=True,
-                help=(
-                    "Pagamento ainda será "
-                    "configurado."
-                ),
+                help="Pagamento em configuração.",
             )
-
-            st.caption(
-                "Pagamento em fase de configuração."
-            )
+            st.caption("Em breve.")
 
     st.divider()
 
-    st.subheader("📊 Comparação dos Planos")
-
-    comparison = pd.DataFrame(
-        {
-            "Recurso": [
-                "Trades",
-                "Métricas",
-                "Gráficos básicos",
-                "Histórico",
-                "Exportação CSV",
-                "Capital inicial",
-                "Insights avançados",
-                "Insígnias",
-                "Gráficos extras",
-                "Análise por ativo",
-                "Simulações",
-                "Análise de perdas",
-            ],
-            "Gratuito": [
-                "Até 10",
-                "✅",
-                "✅",
-                "✅",
-                "✅",
-                "✅",
-                "❌",
-                "❌",
-                "❌",
-                "❌",
-                "❌",
-                "❌",
-            ],
-            "Pro (R$ 29,90/mês)": [
-                "Ilimitado",
-                "✅",
-                "✅",
-                "✅",
-                "✅",
-                "✅",
-                "✅",
-                "✅",
-                "✅",
-                "✅",
-                "✅",
-                "✅",
-            ],
-        }
-    )
+    comp = pd.DataFrame({
+        "Recurso": [
+            "Trades", "Métricas", "Gráficos",
+            "Histórico", "CSV", "Capital",
+            "Insights", "Insígnias", "Extras",
+            "Ativos", "Simulações", "Perdas",
+        ],
+        "Gratuito": [
+            "10", "✅", "✅", "✅", "✅", "✅",
+            "❌", "❌", "❌", "❌", "❌", "❌",
+        ],
+        "Pro (R$29,90)": [
+            "Ilimitado", "✅", "✅", "✅",
+            "✅", "✅", "✅", "✅", "✅",
+            "✅", "✅", "✅",
+        ],
+    })
 
     st.dataframe(
-        comparison,
+        comp,
         use_container_width=True,
         hide_index=True,
     )
@@ -2110,9 +2055,6 @@ with tab_plan:
     st.divider()
 
     st.caption(
-        "A plataforma possui finalidade informativa, "
-        "estatística e organizacional. Não oferece "
-        "recomendação de investimento nem garante "
-        "resultados. Operações financeiras envolvem "
-        "risco de perda."
+        "Finalidade informativa e organizacional. "
+        "Não garante resultados. Risco de perda."
     )
