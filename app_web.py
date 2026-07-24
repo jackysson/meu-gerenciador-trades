@@ -17,23 +17,24 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. CONEXÃO COM AUTO-CORREÇÃO DE CHAVE (O SEGREDO ESTÁ AQUI)
+# 2. CONEXÃO COM AUTO-CORREÇÃO (RESOLVENDO O ERRO DE 'TYPE')
 def start_connection():
     try:
-        # 1. Carregar os segredos manualmente
         if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
+            # Puxa os dados e remove o 'type' para não dar conflito
             creds = dict(st.secrets["connections"]["gsheets"])
+            if "type" in creds:
+                del creds["type"] 
             
-            # 2. Limpar a chave privada (converte \n em quebras de linha reais)
+            # Limpa a chave privada
             if "private_key" in creds:
                 creds["private_key"] = creds["private_key"].replace("\\n", "\n")
             
-            # 3. Iniciar conexão com os dados limpos
+            # Inicia a conexão de forma limpa
             conn = st.connection("gsheets", type=GSheetsConnection, **creds)
             df = conn.read(ttl="0s")
             return df, conn
         else:
-            st.sidebar.error("❌ Configuração [connections.gsheets] não encontrada nos Secrets.")
             return pd.DataFrame(columns=["Data", "Ativo", "Tipo", "Volume", "Entrada", "Saída", "SL", "TP", "Lucro", "Obs"]), None
     except Exception as e:
         st.sidebar.error(f"⚠️ Erro de Configuração: {e}")
@@ -53,12 +54,19 @@ with st.sidebar:
     if conn is not None:
         st.success("✅ Conectado à Nuvem")
     else:
-        st.warning("⚠️ Modo Offline (Backup Ativo)")
+        st.warning("⚠️ Modo Offline (Verifique os Secrets)")
     
     st.session_state.capital_inicial = st.number_input("Capital Inicial (USD)", value=20.0)
     st.divider()
     csv_data = st.session_state.df_trades.to_csv(index=False).encode('utf-8')
     st.download_button("📥 Baixar Backup Manual", csv_data, "backup_trades.csv", "text/csv")
+    
+    uploaded_file = st.file_uploader("📂 Carregar Backup", type="csv")
+    if uploaded_file:
+        try:
+            st.session_state.df_trades = pd.read_csv(uploaded_file)
+            st.success("Backup carregado!")
+        except: st.error("Arquivo inválido.")
 
 # 4. PROCESSAMENTO DE MÉTRICAS (PRO)
 df = st.session_state.df_trades
@@ -95,7 +103,6 @@ with tab1:
             equity_curve = np.cumsum([st.session_state.capital_inicial] + df["Lucro"].tolist())
             st.plotly_chart(px.area(y=equity_curve, title="Crescimento da Conta", template="plotly_dark"), use_container_width=True)
         with col_b:
-            # Cálculo de risco médio
             df["Risco_Cash"] = abs(df["Entrada"] - df["SL"]) * df["Volume"] * 1000
             st.plotly_chart(px.bar(df, y="Risco_Cash", title="Risco por Operação ($)", color_discrete_sequence=['#f85149'], template="plotly_dark"), use_container_width=True)
     else: st.info("Adicione trades para ver os gráficos.")
@@ -103,13 +110,12 @@ with tab1:
 with tab2:
     st.header("📚 Resumo Inteligente")
     if not df.empty:
-        # Cálculo de perdas médias
         avg_loss_cash = abs(loss_df["Lucro"].mean()) if n_losses > 0 else 0
         avg_loss_pts = abs(loss_df["Entrada"] - loss_df["SL"]).mean() if n_losses > 0 else 0
         
-        st.markdown(f"""<div class='insight-card'><h4>📉 Resumo de Perdas (Risco Real)</h4>
-            <p>Sua perda média por trade é de <b>$ {avg_loss_cash:.2f}</b>.</p>
-            <p>Sua distância média de Stop Loss é de <b>{avg_loss_pts:.3f} pontos</b>.</p></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class='insight-card'><h4>📉 Gestão de Risco (Médias)</h4>
+            <p>Perda média em dinheiro: <b>$ {avg_loss_cash:.2f}</b></p>
+            <p>Perda média em pontos: <b>{avg_loss_pts:.3f} pts</b></p></div>""", unsafe_allow_html=True)
         
         st.markdown(f"<div class='insight-card'><h4>💹 Saúde: {'Vencedora 🟢' if pf > 1 else 'Alerta 🔴'}</h4><p>Profit Factor: {pf:.2f}.</p></div>", unsafe_allow_html=True)
         
@@ -129,7 +135,7 @@ with tab4:
         ativo = r1.text_input("Ativo", value=st.session_state.last_asset)
         tipo = r2.selectbox("Tipo", ["buy", "sell"])
         vol = r3.number_input("Volume", value=0.01, format="%.2f")
-        lucro = r4.number_input("Lucro (USD)", value=0.0, format="%.2f")
+        lucro = r4.number_input("Lucro Final (USD)", value=0.0, format="%.2f")
         
         st.write("---")
         st.write("**Preços (3 casas decimais)**")
@@ -151,5 +157,5 @@ with tab4:
                     conn.update(data=st.session_state.df_trades)
                     st.success("✅ Salvo na Nuvem!")
                     st.rerun()
-                except Exception as e: st.error(f"Erro ao salvar: {e}")
+                except Exception as e: st.error(f"Erro ao salvar na nuvem: {e}")
             else: st.warning("Salvo apenas localmente.")
