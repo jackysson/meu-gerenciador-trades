@@ -28,17 +28,48 @@ TRADE_COLUMNS = [
 
 
 # =========================================================
-# LOGIN CHECK
+# LOGIN CHECK & PAGE
 # =========================================================
 
-def check_user_login():
-    try:
-        _ = st.user["sub"]
-        return True
-    except (AttributeError, KeyError):
-        return False
+# Verifica autenticação nativa do Streamlit
+is_user_logged_in = st.user is not None and bool(getattr(st.user, "email", None))
 
-is_user_logged_in = check_user_login()
+if not is_user_logged_in:
+    st.title("📊 Trader Analytics Pro")
+    st.markdown(
+        "Organize suas operações, acompanhe seu "
+        "desempenho e analise seus resultados."
+    )
+    st.info("🔐 Clique abaixo para entrar com sua conta Google.")
+
+    # st.login() é nativo. Não depende de secrets, apenas da configuração no painel Cloud.
+    try:
+        st.login()
+    except Exception as erro:
+        st.error(f"⚠️ Erro ao iniciar login: {erro}")
+        st.info("💡 Ative o Google em: Settings > Authentication (no painel do Streamlit Cloud).")
+
+    st.divider()
+    st.caption("Não oferece recomendação de investimento.")
+    st.stop()
+
+
+# =========================================================
+# USER DATA (após login)
+# =========================================================
+
+try:
+    usuario_email = str(getattr(st.user, "email", "") or "").strip().lower()
+    usuario_nome = str(getattr(st.user, "name", "") or usuario_email.split("@")[0] or "Trader").strip()
+    # Streamlit Native Auth não expõe UID do Firebase. Usamos email sanitizado como ID único.
+    usuario_id = usuario_email.replace("@", "_").replace(".", "_")
+except Exception as e:
+    st.error(f"❌ Conta não identificada: {e}")
+    st.stop()
+
+if not usuario_email:
+    st.error("❌ E-mail não encontrado na autenticação.")
+    st.stop()
 
 
 # =========================================================
@@ -54,161 +85,39 @@ def apply_theme(mode):
         st.markdown(
             """
             <style>
-            .stApp {
-                background-color: #ffffff !important;
-                color: #1a1a2e !important;
-            }
-            section[data-testid="stSidebar"] {
-                background-color: #f0f2f6 !important;
-            }
-            [data-testid="stMetricValue"] {
-                font-size: 26px !important;
-                color: #0066cc !important;
-            }
-            [data-testid="stMetricLabel"],
-            [data-testid="stMetricDelta"] {
-                color: #333333 !important;
-            }
-            .stMetric {
-                background-color: #f8f9fa !important;
-                padding: 15px;
-                border-radius: 12px;
-                border: 1px solid #dee2e6;
-            }
-            .insight-card {
-                background-color: #f0f7ff !important;
-                padding: 20px;
-                border-radius: 10px;
-                border-left: 5px solid #0066cc;
-                margin-bottom: 15px;
-                color: #1a1a2e !important;
-            }
-            .badge-card {
-                background-color: #f8f9fa !important;
-                padding: 18px;
-                border-radius: 12px;
-                border: 1px solid #dee2e6;
-                min-height: 160px;
-                margin-bottom: 12px;
-                color: #1a1a2e !important;
-            }
-            .plan-card {
-                background-color: #f8f9fa !important;
-                padding: 25px;
-                border-radius: 14px;
-                border: 1px solid #dee2e6;
-                margin-bottom: 15px;
-                color: #1a1a2e !important;
-            }
-            .connection-ok {
-                background-color: #d4edda;
-                color: #155724;
-                padding: 10px 16px;
-                border-radius: 10px;
-                border: 1px solid #c3e6cb;
-                font-weight: bold;
-                font-size: 14px;
-                margin-bottom: 10px;
-            }
-            .connection-off {
-                background-color: #fff3cd;
-                color: #856404;
-                padding: 10px 16px;
-                border-radius: 10px;
-                border: 1px solid #ffeeba;
-                font-weight: bold;
-                font-size: 14px;
-                margin-bottom: 10px;
-            }
-            h1, h2, h3, h4, h5, h6,
-            p, span, label, li, td, th {
-                color: #1a1a2e !important;
-            }
+            .stApp { background-color: #ffffff !important; color: #1a1a2e !important; }
+            section[data-testid="stSidebar"] { background-color: #f0f2f6 !important; }
+            [data-testid="stMetricValue"] { font-size: 26px !important; color: #0066cc !important; }
+            [data-testid="stMetricLabel"], [data-testid="stMetricDelta"] { color: #333333 !important; }
+            .stMetric { background-color: #f8f9fa !important; padding: 15px; border-radius: 12px; border: 1px solid #dee2e6; }
+            .insight-card { background-color: #f0f7ff !important; padding: 20px; border-radius: 10px; border-left: 5px solid #0066cc; margin-bottom: 15px; color: #1a1a2e !important; }
+            .badge-card { background-color: #f8f9fa !important; padding: 18px; border-radius: 12px; border: 1px solid #dee2e6; min-height: 160px; margin-bottom: 12px; color: #1a1a2e !important; }
+            .plan-card { background-color: #f8f9fa !important; padding: 25px; border-radius: 14px; border: 1px solid #dee2e6; margin-bottom: 15px; color: #1a1a2e !important; }
+            .connection-ok { background-color: #d4edda; color: #155724; padding: 10px 16px; border-radius: 10px; border: 1px solid #c3e6cb; font-weight: bold; font-size: 14px; margin-bottom: 10px; }
+            .connection-off { background-color: #fff3cd; color: #856404; padding: 10px 16px; border-radius: 10px; border: 1px solid #ffeeba; font-weight: bold; font-size: 14px; margin-bottom: 10px; }
+            h1, h2, h3, h4, h5, h6, p, span, label, li, td, th { color: #1a1a2e !important; }
             .stAlert > div { color: #1a1a2e !important; }
             .stTabs [data-baseweb="tab"] { color: #333333 !important; }
             .stTabs [aria-selected="true"] { color: #0066cc !important; }
-            .stTextInput label, .stNumberInput label,
-            .stSelectbox label, .stTextArea label,
-            .stRadio label, .stForm label,
-            .stDownloadButton label { color: #333333 !important; }
+            .stTextInput label, .stNumberInput label, .stSelectbox label, .stTextArea label, .stRadio label, .stForm label, .stDownloadButton label { color: #333333 !important; }
             </style>
-            """,
-            unsafe_allow_html=True,
+            """, unsafe_allow_html=True,
         )
     else:
         st.markdown(
             """
             <style>
-            .stApp {
-                background-color: #0d1117 !important;
-                color: #e6edf3 !important;
-            }
-            section[data-testid="stSidebar"] {
-                background-color: #161b22 !important;
-                color: #e6edf3 !important;
-            }
-            section[data-testid="stSidebar"] * {
-                color: #e6edf3 !important;
-            }
-            [data-testid="stMetricValue"] {
-                font-size: 26px !important;
-                color: #58a6ff !important;
-            }
-            [data-testid="stMetricLabel"],
-            [data-testid="stMetricDelta"] {
-                color: #8b949e !important;
-            }
-            .stMetric {
-                background-color: #161b22 !important;
-                padding: 15px;
-                border-radius: 12px;
-                border: 1px solid #30363d;
-            }
-            .insight-card {
-                background-color: #1c2128 !important;
-                padding: 20px;
-                border-radius: 10px;
-                border-left: 5px solid #58a6ff;
-                margin-bottom: 15px;
-                color: #e6edf3 !important;
-            }
-            .badge-card {
-                background-color: #161b22 !important;
-                padding: 18px;
-                border-radius: 12px;
-                border: 1px solid #30363d;
-                min-height: 160px;
-                margin-bottom: 12px;
-                color: #e6edf3 !important;
-            }
-            .plan-card {
-                background-color: #161b22 !important;
-                padding: 25px;
-                border-radius: 14px;
-                border: 1px solid #30363d;
-                margin-bottom: 15px;
-                color: #e6edf3 !important;
-            }
-            .connection-ok {
-                background-color: #0d2818 !important;
-                color: #3fb950 !important;
-                padding: 10px 16px;
-                border-radius: 10px;
-                border: 1px solid #238636;
-                font-weight: bold;
-                font-size: 14px;
-                margin-bottom: 10px;
-            }
-            .connection-off {
-                background-color: #2d1b00 !important;
-                color: #f0883e !important;
-                padding: 10px 16px;
-                border-radius: 10px;
-                border: 1px solid #9e6a03;
-                font-weight: bold;
-                font-size: 14px;
-                margin-bottom: 10px;
-            }
+            .stApp { background-color: #0d1117 !important; color: #e6edf3 !important; }
+            section[data-testid="stSidebar"] { background-color: #161b22 !important; color: #e6edf3 !important; }
+            section[data-testid="stSidebar"] * { color: #e6edf3 !important; }
+            [data-testid="stMetricValue"] { font-size: 26px !important; color: #58a6ff !important; }
+            [data-testid="stMetricLabel"], [data-testid="stMetricDelta"] { color: #8b949e !important; }
+            .stMetric { background-color: #161b22 !important; padding: 15px; border-radius: 12px; border: 1px solid #30363d; }
+            .insight-card { background-color: #1c2128 !important; padding: 20px; border-radius: 10px; border-left: 5px solid #58a6ff; margin-bottom: 15px; color: #e6edf3 !important; }
+            .badge-card { background-color: #161b22 !important; padding: 18px; border-radius: 12px; border: 1px solid #30363d; min-height: 160px; margin-bottom: 12px; color: #e6edf3 !important; }
+            .plan-card { background-color: #161b22 !important; padding: 25px; border-radius: 14px; border: 1px solid #30363d; margin-bottom: 15px; color: #e6edf3 !important; }
+            .connection-ok { background-color: #0d2818 !important; color: #3fb950 !important; padding: 10px 16px; border-radius: 10px; border: 1px solid #238636; font-weight: bold; font-size: 14px; margin-bottom: 10px; }
+            .connection-off { background-color: #2d1b00 !important; color: #f0883e !important; padding: 10px 16px; border-radius: 10px; border: 1px solid #9e6a03; font-weight: bold; font-size: 14px; margin-bottom: 10px; }
             h1, h2, h3, h4, h5, h6 { color: #e6edf3 !important; }
             p, span, li, td, th, div { color: #c9d1d9 !important; }
             label, .stMarkdown p { color: #c9d1d9 !important; }
@@ -217,96 +126,23 @@ def apply_theme(mode):
             .stInfo > div { color: #58a6ff !important; }
             .stSuccess > div { color: #3fb950 !important; }
             .stError > div { color: #f85149 !important; }
-            .stTextInput label, .stNumberInput label,
-            .stSelectbox label, .stTextArea label,
-            .stRadio label, .stForm label,
-            .stDownloadButton label { color: #e6edf3 !important; }
-            .stTextInput input, .stNumberInput input,
-            .stTextArea textarea {
-                color: #e6edf3 !important;
-                background-color: #0d1117 !important;
-                border-color: #30363d !important;
-            }
-            .stSelectbox [data-baseweb="select"] {
-                color: #e6edf3 !important;
-                background-color: #0d1117 !important;
-            }
+            .stTextInput label, .stNumberInput label, .stSelectbox label, .stTextArea label, .stRadio label, .stForm label, .stDownloadButton label { color: #e6edf3 !important; }
+            .stTextInput input, .stNumberInput input, .stTextArea textarea { color: #e6edf3 !important; background-color: #0d1117 !important; border-color: #30363d !important; }
+            .stSelectbox [data-baseweb="select"] { color: #e6edf3 !important; background-color: #0d1117 !important; }
             .stTabs [data-baseweb="tab"] { color: #8b949e !important; }
             .stTabs [aria-selected="true"] { color: #e6edf3 !important; }
             .stCaption { color: #8b949e !important; }
             .stDataFrame { color: #e6edf3 !important; }
             .stProgress > div > div { background-color: #58a6ff !important; }
             .stProgress label { color: #c9d1d9 !important; }
-            .stForm {
-                background-color: #161b22 !important;
-                border: 1px solid #30363d !important;
-                border-radius: 12px !important;
-                padding: 15px !important;
-            }
+            .stForm { background-color: #161b22 !important; border: 1px solid #30363d !important; border-radius: 12px !important; padding: 15px !important; }
             .streamlit-expanderHeader { color: #e6edf3 !important; }
             </style>
-            """,
-            unsafe_allow_html=True,
+            """, unsafe_allow_html=True,
         )
 
 
 apply_theme(st.session_state["theme_mode"])
-
-
-# =========================================================
-# LOGIN PAGE
-# =========================================================
-
-if not is_user_logged_in:
-    st.title("📊 Trader Analytics Pro")
-
-    st.markdown(
-        "Organize suas operações, acompanhe seu "
-        "desempenho e analise seus resultados."
-    )
-
-    st.info("Entre com sua conta Google.")
-
-    has_auth = all(
-        key in st.secrets
-        for key in ["auth", "gcp_service_account"]
-    )
-
-    if not has_auth:
-        st.error(
-            "Login não configurado. "
-            "Configure [auth] nos Secrets."
-        )
-    else:
-        try:
-            st.login()
-        except Exception as erro:
-            st.error(f"Erro login: {erro}")
-
-    st.divider()
-    st.caption("Não oferece recomendação de investimento.")
-    st.stop()
-
-
-# =========================================================
-# USER DATA
-# =========================================================
-
-try:
-    usuario_id = str(st.user["sub"])
-    usuario_email = str(
-        st.user.get("email", "")
-    ).strip().lower()
-    usuario_nome = str(
-        st.user.get("name", "User")
-    ).strip()
-except Exception:
-    st.error("Conta não identificada.")
-    st.stop()
-
-if not usuario_email:
-    st.error("E-mail não encontrado.")
-    st.stop()
 
 
 # =========================================================
@@ -316,9 +152,7 @@ if not usuario_email:
 @st.cache_resource
 def get_firestore():
     info = dict(st.secrets["gcp_service_account"])
-    info["private_key"] = info["private_key"].replace(
-        "\\n", "\n"
-    )
+    info["private_key"] = info["private_key"].replace("\\n", "\n")
     creds = service_account.Credentials.from_service_account_info(
         info,
         scopes=["https://www.googleapis.com/auth/cloud-platform"],
@@ -343,10 +177,7 @@ except Exception:
 # =========================================================
 
 def get_owner_emails():
-    return [
-        str(e).strip().lower()
-        for e in st.secrets.get("owner_emails", [])
-    ]
+    return [str(e).strip().lower() for e in st.secrets.get("owner_emails", [])]
 
 def is_owner(email):
     return email.strip().lower() in get_owner_emails()
