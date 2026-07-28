@@ -860,108 +860,236 @@ with tab_i:
 # HISTORY
 # =========================================================
 
+Agora vou adicionar a funcionalidade de **importar CSV** no código atual. Encontre a seção `# HISTORY` no seu `app_web.py` e adicione logo após o `with tab_h:`:
+
+```python
+# =========================================================
+# HISTORY
+# =========================================================
+
 with tab_h:
-    if df.empty:
-        st.info("Nenhum trade.")
-    else:
-        if "confirm_delete_id" in st.session_state:
-            did = st.session_state["confirm_delete_id"]
-            st.warning(f"Excluir trade {did[:8]}?")
-            cc, cx = st.columns(2)
-            with cc:
-                if st.button("✅ Excluir", type="primary", use_container_width=True):
-                    try:
-                        delete_trade(usuario_id, did)
-                        st.session_state.pop("confirm_delete_id", None)
-                        st.session_state["df_trades"] = load_trades(usuario_id)
-                        st.success("Excluido!")
-                        st.rerun()
-                    except Exception:
-                        st.error("Erro ao excluir.")
-            with cx:
-                if st.button("❌ Cancelar", use_container_width=True):
-                    st.session_state.pop("confirm_delete_id", None)
-                    st.rerun()
-            st.divider()
 
-        eid = st.session_state.get("editing_trade_id")
-        if eid:
-            tr = df[df["id"] == eid]
-            if not tr.empty:
-                r = tr.iloc[0]
-                st.subheader("✏️ Editar Trade")
-                with st.form("edit_form"):
-                    e1, e2, e3, e4 = st.columns(4)
-                    ea = e1.text_input("Ativo", value=r["Ativo"])
-                    et = e2.selectbox("Tipo", ["buy", "sell"],
-                                      index=0 if r["Tipo"] == "buy" else 1)
-                    ev = e3.number_input("Volume", min_value=0.01,
-                                         value=float(r["Volume"]),
-                                         step=0.01, format="%.2f")
-                    ep = e4.number_input("Lucro",
-                                         value=float(r["Lucro"]),
-                                         format="%.2f")
-                    st.divider()
-                    e5, e6, e7, e8 = st.columns(4)
-                    een = e5.number_input("Entrada",
-                                          value=float(r["Entrada"]),
-                                          format="%.3f")
-                    eex = e6.number_input("Saida",
-                                          value=float(r["Saída"]),
-                                          format="%.3f")
-                    esl = e7.number_input("SL",
-                                          value=float(r["SL"]),
-                                          format="%.3f")
-                    etp = e8.number_input("TP",
-                                          value=float(r["TP"]),
-                                          format="%.3f")
-                    eob = st.text_area("Obs", value=r["Obs"],
-                                       max_chars=500)
-                    s1b, s2b = st.columns(2)
-                    with s1b:
-                        if st.form_submit_button("💾 Salvar",
-                                                  type="primary",
-                                                  use_container_width=True):
-                            try:
-                                td = {"asset": ea.strip().upper(),
-                                      "type": et, "volume": ev,
-                                      "entry": een, "exit": eex,
-                                      "sl": esl, "tp": etp,
-                                      "profit": ep,
-                                      "observation": eob.strip()}
-                                edit_trade(usuario_id, eid, td)
-                                st.session_state.pop("editing_trade_id", None)
+    # ---------------------------------------------------
+    # IMPORTAR CSV
+    # ---------------------------------------------------
+    with st.expander("📤 Importar trades via CSV", expanded=False):
+        st.caption("O arquivo deve ter as colunas: Ativo, Tipo, Volume, Entrada, Saída, SL, TP, Lucro, Obs")
+
+        col_imp1, col_imp2 = st.columns(2)
+        with col_imp1:
+            modo_import = st.radio(
+                "Modo de importação",
+                ["➕ Adicionar aos existentes", "🔄 Substituir todos"],
+                key="import_mode"
+            )
+        with col_imp2:
+            st.markdown("**📋 Formato esperado do CSV:**")
+            exemplo = pd.DataFrame([{
+                "Ativo": "USDJPY",
+                "Tipo": "buy",
+                "Volume": 0.01,
+                "Entrada": 149.500,
+                "Saída": 150.000,
+                "SL": 149.000,
+                "TP": 150.500,
+                "Lucro": 5.00,
+                "Obs": "exemplo"
+            }])
+            st.dataframe(exemplo, use_container_width=True, hide_index=True)
+
+        arquivo = st.file_uploader(
+            "Selecione o arquivo CSV",
+            type=["csv"],
+            key="csv_uploader"
+        )
+
+        if arquivo is not None:
+            try:
+                # Ler CSV
+                df_import = pd.read_csv(arquivo)
+
+                # Normalizar nomes das colunas
+                df_import.columns = [c.strip() for c in df_import.columns]
+
+                # Verificar colunas obrigatórias
+                colunas_obrig = ["Ativo", "Tipo", "Lucro"]
+                colunas_faltando = [c for c in colunas_obrig if c not in df_import.columns]
+
+                if colunas_faltando:
+                    st.error(f"❌ Colunas faltando no CSV: {', '.join(colunas_faltando)}")
+                else:
+                    # Preencher colunas opcionais com 0 se não existirem
+                    for col_opt in ["Volume", "Entrada", "Saída", "SL", "TP"]:
+                        if col_opt not in df_import.columns:
+                            df_import[col_opt] = 0.0
+                    if "Obs" not in df_import.columns:
+                        df_import["Obs"] = ""
+
+                    # Preview dos dados
+                    st.subheader(f"👁️ Preview — {len(df_import)} trades encontrados")
+                    st.dataframe(df_import.head(10), use_container_width=True, hide_index=True)
+
+                    if len(df_import) > 10:
+                        st.caption(f"Mostrando 10 de {len(df_import)} trades.")
+
+                    # Verificar limite free
+                    trades_atuais = len(st.session_state["df_trades"])
+                    trades_novos = len(df_import)
+                    total_apos = trades_atuais + trades_novos
+
+                    if not is_pro and total_apos > FREE_TRADE_LIMIT:
+                        st.warning(
+                            f"⚠️ Limite do plano gratuito: {FREE_TRADE_LIMIT} trades. "
+                            f"Você tem {trades_atuais} e tenta importar {trades_novos}. "
+                            f"Apenas os primeiros {FREE_TRADE_LIMIT - trades_atuais} serão importados."
+                        )
+                        df_import = df_import.head(FREE_TRADE_LIMIT - trades_atuais)
+
+                    # Botão de confirmação
+                    col_conf1, col_conf2 = st.columns(2)
+
+                    with col_conf1:
+                        if st.button(
+                            f"✅ Confirmar importação de {len(df_import)} trades",
+                            type="primary",
+                            use_container_width=True,
+                            key="btn_importar"
+                        ):
+                            if db is None:
+                                st.error("❌ Sem conexão com o banco de dados.")
+                            else:
+                                # Substituir todos se necessário
+                                if "Substituir" in modo_import:
+                                    try:
+                                        trades_ref = db.collection("users").document(usuario_id).collection("trades")
+                                        for doc in trades_ref.stream():
+                                            doc.reference.delete()
+                                        db.collection("users").document(usuario_id).set(
+                                            {"trade_count": 0,
+                                             "updated_at": firestore.SERVER_TIMESTAMP},
+                                            merge=True
+                                        )
+                                        st.info("🗑️ Trades anteriores removidos.")
+                                    except Exception as e:
+                                        st.error(f"Erro ao limpar trades: {e}")
+
+                                # Importar os novos trades
+                                sucesso = 0
+                                erro = 0
+                                progress_bar = st.progress(0, text="Importando...")
+
+                                for idx, row in df_import.iterrows():
+                                    try:
+                                        td = {
+                                            "asset": str(row.get("Ativo", "")).strip().upper(),
+                                            "type": str(row.get("Tipo", "buy")).strip().lower(),
+                                            "volume": float(row.get("Volume", 0.01) or 0.01),
+                                            "entry": float(row.get("Entrada", 0) or 0),
+                                            "exit": float(row.get("Saída", row.get("Saida", 0)) or 0),
+                                            "sl": float(row.get("SL", 0) or 0),
+                                            "tp": float(row.get("TP", 0) or 0),
+                                            "profit": float(row.get("Lucro", 0) or 0),
+                                            "observation": str(row.get("Obs", "") or ""),
+                                        }
+
+                                        # Validar tipo
+                                        if td["type"] not in ("buy", "sell"):
+                                            td["type"] = "buy"
+
+                                        # Salvar no Firestore
+                                        ref = db.collection("users").document(usuario_id)
+                                        tref = ref.collection("trades").document()
+                                        tref.set({
+                                            **td,
+                                            "created_at": firestore.SERVER_TIMESTAMP,
+                                            "updated_at": firestore.SERVER_TIMESTAMP,
+                                        })
+
+                                        sucesso += 1
+                                        progress_bar.progress(
+                                            sucesso / len(df_import),
+                                            text=f"Importando {sucesso}/{len(df_import)}..."
+                                        )
+
+                                    except Exception:
+                                        erro += 1
+
+                                # Atualizar contador
+                                snap = db.collection("users").document(usuario_id).get()
+                                count_atual = int(snap.to_dict().get("trade_count", 0)) if snap.exists else 0
+                                db.collection("users").document(usuario_id).set(
+                                    {"trade_count": count_atual + sucesso,
+                                     "updated_at": firestore.SERVER_TIMESTAMP},
+                                    merge=True
+                                )
+
+                                # Recarregar trades
                                 st.session_state["df_trades"] = load_trades(usuario_id)
-                                st.success("Atualizado!")
+
+                                if sucesso > 0:
+                                    st.success(f"✅ {sucesso} trades importados com sucesso!")
+                                if erro > 0:
+                                    st.warning(f"⚠️ {erro} trades com erro e ignorados.")
+
                                 st.rerun()
-                            except Exception:
-                                st.error("Erro ao salvar.")
-                    with s2b:
-                        if st.form_submit_button("❌ Cancelar",
-                                                  use_container_width=True):
-                            st.session_state.pop("editing_trade_id", None)
+
+                    with col_conf2:
+                        if st.button(
+                            "❌ Cancelar",
+                            use_container_width=True,
+                            key="btn_cancelar_import"
+                        ):
                             st.rerun()
-            st.divider()
 
-        dcols = [c for c in TRADE_COLUMNS if c != "id"]
-        st.dataframe(df[dcols].sort_index(ascending=False),
-                     use_container_width=True, hide_index=True)
+            except Exception as e:
+                st.error(f"❌ Erro ao ler o arquivo: {e}")
+                st.caption("Verifique se o arquivo é um CSV válido com ponto e vírgula ou vírgula como separador.")
+
+        # Download do template
         st.divider()
+        st.caption("📥 Não tem um CSV? Baixe o modelo:")
+        template_df = pd.DataFrame([
+            {"Ativo": "USDJPY", "Tipo": "buy",  "Volume": 0.01, "Entrada": 149.500,
+             "Saída": 150.000, "SL": 149.000, "TP": 150.500, "Lucro": 5.00,  "Obs": "Exemplo ganho"},
+            {"Ativo": "EURUSD", "Tipo": "sell", "Volume": 0.02, "Entrada": 1.0850,
+             "Saída": 1.0800,  "SL": 1.0900,  "TP": 1.0780,  "Lucro": -3.50, "Obs": "Exemplo perda"},
+        ])
+        template_csv = template_df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "📥 Baixar modelo CSV",
+            data=template_csv,
+            file_name="modelo_trades.csv",
+            mime="text/csv",
+            use_container_width=True,
+            key="download_template"
+        )
 
-        st.subheader("Acoes por trade")
-        tids = df["id"].tolist()
-        sel = st.selectbox("Selecione o ID", options=tids,
-                           format_func=lambda x: f"{x[:8]}..." if len(x) > 8 else x)
-        if sel:
-            ce, cd = st.columns(2)
-            with ce:
-                if st.button("✏️ Editar", use_container_width=True):
-                    st.session_state["editing_trade_id"] = sel
-                    st.rerun()
-            with cd:
-                if st.button("🗑️ Excluir", use_container_width=True):
-                    st.session_state["confirm_delete_id"] = sel
-                    st.rerun()
+    st.divider()
+
+    # ---------------------------------------------------
+    # RESTO DO HISTÓRICO (mantido igual)
+    # ---------------------------------------------------
+    if df.empty:
+        st.info("Nenhum trade registrado.")
+    else:
+        # ... seu código existente do histórico ...
+```
+
+## 📋 **O que foi adicionado:**
+
+```
+✅ Upload de arquivo CSV
+✅ Preview dos dados antes de importar
+✅ Modo "Adicionar" ou "Substituir"
+✅ Validação de colunas obrigatórias
+✅ Preenchimento automático de colunas opcionais
+✅ Barra de progresso durante importação
+✅ Respeita limite do plano gratuito
+✅ Download de modelo CSV
+✅ Tratamento de erros
+```
+
+Faça o push e teste! 😊
 
 
 # =========================================================
