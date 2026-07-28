@@ -1,21 +1,3 @@
-O erro é de **indentação**: as duas funções pequenas (`fmt_money` e `fmt_mult`) estavam "aninhadas" dentro da aba, e na hora de colar o recuo desalinhou. A solução definitiva: **mover essas funções para o topo do arquivo** (sem recuo), onde é impossível errar a indentação.
-
-Para não arriscar mais colagens parciais, aqui está o **arquivo completo e corrigido**.
-
----
-
-## 🔧 Como aplicar (à prova de erro)
-
-1. GitHub > `app_web.py` > lápis ✏️
-2. **Ctrl + A** → **Delete**
-3. Cole **SOMENTE** o bloco abaixo (começa em `import streamlit as st`, termina em `st.logout()`)
-4. **Commit changes** → Streamlit: **Reboot**
-
-✅ Conferência: aperte **Ctrl + Home** — a linha 1 deve ser `import streamlit as st`.
-
----
-
-```python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -1170,16 +1152,3 @@ with tab_c:
         st.divider()
         if st.button("🚪 Sair da conta", use_container_width=True):
             st.logout()
-```
-
----
-
-## ✅ O que foi corrigido
-
-- **IndentationError resolvido**: `fmt_money` e `fmt_mult` agora vivem no topo do arquivo (seção `FORMATTERS`), sem recuo — impossível quebrar de novo
-- **Projeção realista**: modo linear por padrão (com seus dados: 100 trades ≈ **$ 241**, não `1e+24`)
-- **Visual elaborado**: 3 cards de métricas + gráfico de área + tabela com multiplicador
-- **Slider de %** no modo composto (0,1%–10%) com aviso quando a média histórica é alta demais
-- **Números formatados**: `$ 1.14 M`, `$ 6.60 B` — nunca mais notação científica
-
-Depois do Reboot, me confirma com `✅ Ficou bom` ou me diga o próximo ajuste. 🚀
