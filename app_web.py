@@ -682,30 +682,99 @@ with tab_g:
         st.divider()
 
         if is_pro:
-            st.subheader("🧮 Projeção de Crescimento (Juros Compostos)")
+                       st.subheader("🧮 Projeção de Crescimento")
+
+            def fmt_money(v):
+                av, sign = abs(v), "-" if v < 0 else ""
+                if av >= 1e12: return f"{sign}$ {av/1e12:,.2f} T"
+                if av >= 1e9:  return f"{sign}$ {av/1e9:,.2f} B"
+                if av >= 1e6:  return f"{sign}$ {av/1e6:,.2f} M"
+                if av >= 1e3 and av < 1e6: return f"{sign}$ {v:,.2f}"
+                return f"{sign}$ {v:,.2f}"
+
+            def fmt_mult(v):
+                if v >= 1e6: return f"{v/1e6:,.2f}M x"
+                if v >= 1e3: return f"{v/1e3:,.1f}K x"
+                return f"{v:,.2f}x"
+
             if len(df) > 0 and base_capital > 0:
                 avg_per_trade = total_profit / len(df)
-                rate = avg_per_trade / base_capital
-                custom_n = st.number_input("Quantidade de trades para projetar",
-                                           min_value=1, value=100, step=10)
-                counts = sorted(set([10, 50, 100, 250, 500, 1000, int(custom_n)]))
+                hist_rate = avg_per_trade / base_capital
+
+                cc1, cc2, cc3 = st.columns(3)
+                with cc1:
+                    modo = st.radio("Modo de projeção",
+                                    ["📏 Linear (média $ por trade)",
+                                     "📈 Juros compostos (% por trade)"],
+                                    key="proj_mode")
+                with cc2:
+                    custom_n = st.number_input("Nº de trades projetados",
+                                               min_value=1, value=100, step=10,
+                                               key="proj_n")
+                with cc3:
+                    if "composto" in modo.lower():
+                        default_rate = round(min(max(hist_rate, 0.001), 0.02) * 100, 1)
+                        rate_pct = st.slider("% por trade", 0.1, 10.0,
+                                             default_rate, 0.1,
+                                             key="proj_rate") / 100.0
+                        st.caption(f"Sua média histórica: {hist_rate*100:.2f}%/trade")
+                    else:
+                        rate_pct = None
+                        st.caption(f"Sua média histórica: $ {avg_per_trade:,.2f}/trade")
+
+                counts = sorted({n for n in [10, 50, 100, 250, 500, int(custom_n)]
+                                 if n <= int(custom_n)})
+                curva_n, curva_v = [], []
+                for n in range(1, int(custom_n) + 1):
+                    if rate_pct is not None:
+                        proj = base_capital * ((1 + rate_pct) ** n)
+                    else:
+                        proj = base_capital + avg_per_trade * n
+                    curva_n.append(n)
+                    curva_v.append(proj)
+
                 rows = []
                 for n in counts:
-                    proj = base_capital * ((1 + rate) ** n)
+                    idx = n - 1
+                    proj = curva_v[idx]
                     rows.append({
                         "Trades": n,
-                        "Equity Projetado": round(proj, 2),
-                        "Lucro Projetado": round(proj - base_capital, 2),
+                        "Equity Projetado": fmt_money(proj),
+                        "Lucro Projetado": fmt_money(proj - base_capital),
+                        "Multiplicador": fmt_mult(proj / base_capital),
                     })
+
+                proj_final = curva_v[-1]
+                m1, m2, m3 = st.columns(3)
+                m1.metric("💵 Equity projetado", fmt_money(proj_final))
+                m2.metric("📈 Lucro projetado", fmt_money(proj_final - base_capital))
+                m3.metric("✖️ Multiplicador", fmt_mult(proj_final / base_capital))
+
+                fig_proj = px.area(x=curva_n, y=curva_v,
+                                   title=f"Projeção de Equity até {int(custom_n)} trades",
+                                   labels={"x": "Nº do Trade", "y": "Equity (USD)"},
+                                   template=PLOTLY_TEMPLATE,
+                                   color_discrete_sequence=["#3fb950"])
+                if max(curva_v) > 1_000_000:
+                    fig_proj.update_yaxes(type="log")
+                st.plotly_chart(fig_proj, use_container_width=True)
+                st.caption("📌 Eixo X: quantidade de trades | Eixo Y: equity projetado em dólares (escala logarítmica quando os valores são muito grandes).")
+
                 st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-                st.caption(
-                    f"📌 Taxa média por trade: {rate * 100:.2f}% "
-                    f"(lucro médio $ {avg_per_trade:.2f} sobre capital base $ {base_capital:,.2f}). "
-                    "Fórmula: Equity = Capital Base × (1 + taxa) ^ nº trades. "
-                    "Projeção teórica baseada no histórico; não garante resultados."
-                )
-                if rate <= 0:
+
+                if hist_rate > 0.05 and rate_pct is not None:
+                    st.warning(
+                        f"⚠️ Sua média histórica ({hist_rate*100:.1f}%/trade) é alta demais "
+                        "para projetar a longo prazo com juros compostos. O slider começa em "
+                        "um valor conservador — ajuste com cautela."
+                    )
+                if avg_per_trade <= 0:
                     st.warning("Seu resultado médio atual é negativo ou zero — a projeção mostra o impacto de manter esse desempenho.")
+                st.caption(
+                    f"Base de cálculo: capital $ {base_capital:,.2f} | "
+                    f"modo {'composto ' + f'{(rate_pct or 0)*100:.1f}%/trade' if rate_pct else 'linear $ ' + f'{avg_per_trade:,.2f}/trade'}. "
+                    "Projeção teórica; não garante resultados futuros."
+                )
             else:
                 st.info("Registre trades para calcular a projeção.")
 
