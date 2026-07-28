@@ -62,7 +62,7 @@ if not is_user_logged_in:
 try:
     usuario_email = str(st.user.email or "").strip().lower()
     usuario_nome = str(st.user.name or usuario_email.split("@")[0] or "Trader").strip()
-    usuario_id = usuario_email.replace("@", "_").replace(".", "_")
+    usuario_id = usuario_email.replace("@", "").replace(".", "")
 except Exception as e:
     st.error(f"❌ Conta não identificada: {e}")
     st.stop()
@@ -73,76 +73,54 @@ if not usuario_email:
 
 
 # =========================================================
-# THEME
+# THEME (unico seletor: aba Config)
 # =========================================================
 
 if "theme_mode" not in st.session_state:
     st.session_state["theme_mode"] = "🌙 Noite"
 
+PLOTLY_TEMPLATE = "plotly_dark" if st.session_state["theme_mode"] == "🌙 Noite" else "plotly_white"
 
-def apply_theme(mode):
-    if mode == "☀️ Dia":
-        st.markdown(
-            """
-            <style>
-            .stApp { background-color: #ffffff !important; color: #1a1a2e !important; }
-            section[data-testid="stSidebar"] { background-color: #f0f2f6 !important; }
-            [data-testid="stMetricValue"] { font-size: 26px !important; color: #0066cc !important; }
-            [data-testid="stMetricLabel"], [data-testid="stMetricDelta"] { color: #333333 !important; }
-            .stMetric { background-color: #f8f9fa !important; padding: 15px; border-radius: 12px; border: 1px solid #dee2e6; }
-            .insight-card { background-color: #f0f7ff !important; padding: 20px; border-radius: 10px; border-left: 5px solid #0066cc; margin-bottom: 15px; color: #1a1a2e !important; }
-            .badge-card { background-color: #f8f9fa !important; padding: 18px; border-radius: 12px; border: 1px solid #dee2e6; min-height: 160px; margin-bottom: 12px; color: #1a1a2e !important; }
-            .plan-card { background-color: #f8f9fa !important; padding: 25px; border-radius: 14px; border: 1px solid #dee2e6; margin-bottom: 15px; color: #1a1a2e !important; }
-            .connection-ok { background-color: #d4edda; color: #155724; padding: 10px 16px; border-radius: 10px; border: 1px solid #c3e6cb; font-weight: bold; font-size: 14px; margin-bottom: 10px; }
-            .connection-off { background-color: #fff3cd; color: #856404; padding: 10px 16px; border-radius: 10px; border: 1px solid #ffeeba; font-weight: bold; font-size: 14px; margin-bottom: 10px; }
-            h1, h2, h3, h4, h5, h6, p, span, label, li, td, th { color: #1a1a2e !important; }
-            .stAlert > div { color: #1a1a2e !important; }
-            .stTabs [data-baseweb="tab"] { color: #333333 !important; }
-            .stTabs [aria-selected="true"] { color: #0066cc !important; }
-            .stTextInput label, .stNumberInput label, .stSelectbox label, .stTextArea label, .stRadio label, .stForm label, .stDownloadButton label { color: #333333 !important; }
-            </style>
-            """, unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            """
-            <style>
-            .stApp { background-color: #0d1117 !important; color: #e6edf3 !important; }
-            section[data-testid="stSidebar"] { background-color: #161b22 !important; color: #e6edf3 !important; }
-            section[data-testid="stSidebar"] * { color: #e6edf3 !important; }
-            [data-testid="stMetricValue"] { font-size: 26px !important; color: #58a6ff !important; }
-            [data-testid="stMetricLabel"], [data-testid="stMetricDelta"] { color: #8b949e !important; }
-            .stMetric { background-color: #161b22 !important; padding: 15px; border-radius: 12px; border: 1px solid #30363d; }
-            .insight-card { background-color: #1c2128 !important; padding: 20px; border-radius: 10px; border-left: 5px solid #58a6ff; margin-bottom: 15px; color: #e6edf3 !important; }
-            .badge-card { background-color: #161b22 !important; padding: 18px; border-radius: 12px; border: 1px solid #30363d; min-height: 160px; margin-bottom: 12px; color: #e6edf3 !important; }
-            .plan-card { background-color: #161b22 !important; padding: 25px; border-radius: 14px; border: 1px solid #30363d; margin-bottom: 15px; color: #e6edf3 !important; }
-            .connection-ok { background-color: #0d2818 !important; color: #3fb950 !important; padding: 10px 16px; border-radius: 10px; border: 1px solid #238636; font-weight: bold; font-size: 14px; margin-bottom: 10px; }
-            .connection-off { background-color: #2d1b00 !important; color: #f0883e !important; padding: 10px 16px; border-radius: 10px; border: 1px solid #9e6a03; font-weight: bold; font-size: 14px; margin-bottom: 10px; }
-            h1, h2, h3, h4, h5, h6 { color: #e6edf3 !important; }
-            p, span, li, td, th, div { color: #c9d1d9 !important; }
-            label, .stMarkdown p { color: #c9d1d9 !important; }
-            .stAlert > div { color: #c9d1d9 !important; }
-            .stWarning > div { color: #e3b341 !important; }
-            .stInfo > div { color: #58a6ff !important; }
-            .stSuccess > div { color: #3fb950 !important; }
-            .stError > div { color: #f85149 !important; }
-            .stTextInput label, .stNumberInput label, .stSelectbox label, .stTextArea label, .stRadio label, .stForm label, .stDownloadButton label { color: #e6edf3 !important; }
-            .stTextInput input, .stNumberInput input, .stTextArea textarea { color: #e6edf3 !important; background-color: #0d1117 !important; border-color: #30363d !important; }
-            .stSelectbox [data-baseweb="select"] { color: #e6edf3 !important; background-color: #0d1117 !important; }
-            .stTabs [data-baseweb="tab"] { color: #8b949e !important; }
-            .stTabs [aria-selected="true"] { color: #e6edf3 !important; }
-            .stCaption { color: #8b949e !important; }
-            .stDataFrame { color: #e6edf3 !important; }
-            .stProgress > div > div { background-color: #58a6ff !important; }
-            .stProgress label { color: #c9d1d9 !important; }
-            .stForm { background-color: #161b22 !important; border: 1px solid #30363d !important; border-radius: 12px !important; padding: 15px !important; }
-            .streamlit-expanderHeader { color: #e6edf3 !important; }
-            </style>
-            """, unsafe_allow_html=True,
-        )
-
-
-apply_theme(st.session_state["theme_mode"])
+if st.session_state["theme_mode"] == "☀️ Dia":
+    st.markdown("""
+        <style>
+        #MainMenu, [data-testid="stToolbar"], [data-testid="stFooter"], footer {visibility: hidden !important; display: none !important;}
+        .stApp { background-color: #ffffff !important; }
+        section[data-testid="stSidebar"] { background-color: #f0f2f6 !important; }
+        h1, h2, h3, h4, h5, h6, p, span, label, li, td, th { color: #1a1a2e !important; }
+        .stMetric { background-color: #f8f9fa !important; padding: 15px; border-radius: 12px; border: 1px solid #dee2e6; }
+        .stTextInput input, .stNumberInput input, .stTextArea textarea {
+            background-color: #ffffff !important; color: #1a1a2e !important; border-color: #ced4da !important; }
+        .stSelectbox [data-baseweb="select"] { background-color: #ffffff !important; }
+        [data-baseweb="popover"], [data-baseweb="menu"] { background-color: #ffffff !important; }
+        .stForm { background-color: #f8f9fa !important; border: 1px solid #dee2e6 !important; border-radius: 12px !important; padding: 15px !important; }
+        .insight-card { background-color: #f0f7ff !important; padding: 20px; border-radius: 10px; border-left: 5px solid #0066cc; margin-bottom: 15px; }
+        .badge-card { background-color: #f8f9fa !important; padding: 18px; border-radius: 12px; border: 1px solid #dee2e6; min-height: 160px; margin-bottom: 12px; }
+        .plan-card { background-color: #f8f9fa !important; padding: 25px; border-radius: 14px; border: 1px solid #dee2e6; margin-bottom: 15px; }
+        .connection-ok { background-color: #d4edda; color: #155724; padding: 10px 16px; border-radius: 10px; border: 1px solid #c3e6cb; font-weight: bold; font-size: 14px; margin-bottom: 10px; }
+        .connection-off { background-color: #fff3cd; color: #856404; padding: 10px 16px; border-radius: 10px; border: 1px solid #ffeeba; font-weight: bold; font-size: 14px; margin-bottom: 10px; }
+        </style>
+        """, unsafe_allow_html=True)
+else:
+    st.markdown("""
+        <style>
+        #MainMenu, [data-testid="stToolbar"], [data-testid="stFooter"], footer {visibility: hidden !important; display: none !important;}
+        .stApp { background-color: #0d1117 !important; color: #e6edf3 !important; }
+        section[data-testid="stSidebar"] { background-color: #161b22 !important; }
+        h1, h2, h3, h4, h5, h6, p, span, label, li, td, th, div { color: #c9d1d9 !important; }
+        .stMetric { background-color: #161b22 !important; padding: 15px; border-radius: 12px; border: 1px solid #30363d; }
+        .stTextInput input, .stNumberInput input, .stTextArea textarea {
+            background-color: #0d1117 !important; color: #e6edf3 !important; border-color: #30363d !important; }
+        .stSelectbox [data-baseweb="select"] { background-color: #0d1117 !important; color: #e6edf3 !important; }
+        [data-baseweb="popover"], [data-baseweb="menu"] { background-color: #161b22 !important; }
+        .stForm { background-color: #161b22 !important; border: 1px solid #30363d !important; border-radius: 12px !important; padding: 15px !important; }
+        .insight-card { background-color: #1c2128 !important; padding: 20px; border-radius: 10px; border-left: 5px solid #58a6ff; margin-bottom: 15px; }
+        .badge-card { background-color: #161b22 !important; padding: 18px; border-radius: 12px; border: 1px solid #30363d; min-height: 160px; margin-bottom: 12px; }
+        .plan-card { background-color: #161b22 !important; padding: 25px; border-radius: 14px; border: 1px solid #30363d; margin-bottom: 15px; }
+        .connection-ok { background-color: #0d2818 !important; color: #3fb950 !important; padding: 10px 16px; border-radius: 10px; border: 1px solid #238636; font-weight: bold; font-size: 14px; margin-bottom: 10px; }
+        .connection-off { background-color: #2d1b00 !important; color: #f0883e !important; padding: 10px 16px; border-radius: 10px; border: 1px solid #9e6a03; font-weight: bold; font-size: 14px; margin-bottom: 10px; }
+        </style>
+        """, unsafe_allow_html=True)
 
 
 # =========================================================
@@ -151,8 +129,18 @@ apply_theme(st.session_state["theme_mode"])
 
 @st.cache_resource
 def get_firestore():
-    info = dict(st.secrets["gcp_service_account"])
-    info["private_key"] = info["private_key"].replace("\\n", "\n")
+    if "gcp_service_account" in st.secrets:
+        info = dict(st.secrets["gcp_service_account"])
+    elif "firebase" in st.secrets:
+        info = dict(st.secrets["firebase"])
+    else:
+        raise KeyError("Faltando [gcp_service_account] (ou [firebase]) nos Secrets.")
+
+    pk = info.get("private_key", "")
+    if "\\n" in pk:
+        pk = pk.replace("\\n", "\n")
+    info["private_key"] = pk.strip() + "\n"
+
     creds = service_account.Credentials.from_service_account_info(
         info,
         scopes=["https://www.googleapis.com/auth/cloud-platform"],
@@ -165,11 +153,17 @@ def get_firestore():
 
 cloud_connected = False
 db = None
+db_error = ""
 try:
     db = get_firestore()
+    db.collection("users").document("__ping__").get()
     cloud_connected = True
-except Exception:
+except Exception as e:
     cloud_connected = False
+    db_error = f"{type(e).__name__}: {e}"
+
+if not cloud_connected and db_error:
+    st.error(f"🔧 Debug Firestore: {db_error}")
 
 
 # =========================================================
@@ -230,11 +224,11 @@ def has_pro_access(uid, email):
     if not doc.exists:
         return False
     d = doc.to_dict()
-    if d.get("plan") != "pro":
+    if str(d.get("plan", "")).strip().lower() != "pro":
         return False
-    if d.get("subscription_status") not in ("active", "trialing"):
+    if str(d.get("subscription_status", "")).strip().lower() not in ("active", "trialing"):
         return False
-    if d.get("access_type") == "lifetime":
+    if str(d.get("access_type", "")).strip().lower() == "lifetime":
         return True
     exp = normalize_exp(d.get("subscription_expires_at"))
     if exp is None:
@@ -340,7 +334,7 @@ def delete_trade(uid, tid):
 
 
 # =========================================================
-# CAPITAL
+# CAPITAL & APORTES
 # =========================================================
 
 def load_capital(uid):
@@ -356,6 +350,28 @@ def save_capital(uid, cap):
         "initial_capital": float(cap),
         "updated_at": firestore.SERVER_TIMESTAMP,
     }, merge=True)
+
+def load_deposits(uid):
+    if db is None:
+        return 0.0, []
+    total = 0.0
+    events = []
+    for doc in db.collection("users").document(uid).collection("deposits").stream():
+        d = doc.to_dict()
+        amt = float(d.get("amount", 0))
+        ca = d.get("created_at")
+        total += amt
+        if isinstance(ca, datetime):
+            events.append((ca, amt))
+    return total, events
+
+def save_aporte(uid, value):
+    if db is None:
+        raise RuntimeError("Banco indisponível.")
+    db.collection("users").document(uid).collection("deposits").document().set({
+        "amount": float(value),
+        "created_at": firestore.SERVER_TIMESTAMP,
+    })
 
 
 # =========================================================
@@ -402,7 +418,8 @@ else:
 if st.session_state.get("active_user_id") != usuario_id:
     st.session_state["active_user_id"] = usuario_id
     for k in ["df_trades", "initial_capital", "last_asset",
-              "editing_trade_id", "confirm_delete_id"]:
+              "editing_trade_id", "confirm_delete_id",
+              "deposit_total", "deposit_events"]:
         st.session_state.pop(k, None)
 
 if "df_trades" not in st.session_state:
@@ -417,6 +434,15 @@ if "initial_capital" not in st.session_state:
         st.session_state["initial_capital"] = load_capital(usuario_id)
     except Exception:
         st.session_state["initial_capital"] = 20.0
+
+if "deposit_total" not in st.session_state:
+    try:
+        dt, de = load_deposits(usuario_id)
+        st.session_state["deposit_total"] = dt
+        st.session_state["deposit_events"] = de
+    except Exception:
+        st.session_state["deposit_total"] = 0.0
+        st.session_state["deposit_events"] = []
 
 if "last_asset" not in st.session_state:
     st.session_state["last_asset"] = "USDJPY"
@@ -435,17 +461,10 @@ if "flash_message" in st.session_state:
 
 
 # =========================================================
-# SIDEBAR
+# SIDEBAR (enxuta)
 # =========================================================
 
 with st.sidebar:
-    theme = st.radio("Aparencia", ["🌙 Noite", "☀️ Dia"],
-                     horizontal=True, key="theme_sel")
-    if theme != st.session_state["theme_mode"]:
-        st.session_state["theme_mode"] = theme
-        st.rerun()
-
-    st.divider()
     st.subheader("☁️ Conexao")
 
     if cloud_connected:
@@ -454,22 +473,6 @@ with st.sidebar:
     else:
         st.markdown('<div class="connection-off">⚠️ Modo Offline</div>',
                      unsafe_allow_html=True)
-
-    st.divider()
-    st.subheader("👤 Conta")
-    st.write(usuario_nome)
-    st.caption(usuario_email)
-
-    if owner:
-        st.success("🛡️ Dev — Pro permanente")
-    elif is_pro:
-        st.success("⭐ Pro — R$ 29,90/mes")
-        exp = plan_info.get("subscription_expires_at")
-        if exp:
-            st.caption(f"Ate {exp.strftime('%d/%m/%Y')}.")
-    else:
-        st.info("🆓 Gratuito")
-        st.caption("Limite de 10 trades.")
 
     st.divider()
     cur = len(st.session_state["df_trades"])
@@ -485,19 +488,37 @@ with st.sidebar:
         st.caption(f"{cur} trade(s) registrados.")
 
     st.divider()
-    st.subheader("💰 Capital")
+    st.subheader("💰 Capital & Aportes")
 
     with st.form("capital_form"):
         cap = st.number_input("Capital Inicial (USD)", min_value=0.0,
                               value=float(st.session_state["initial_capital"]),
                               step=1.0, format="%.2f")
-        if st.form_submit_button("💾 Salvar", use_container_width=True):
+        aporte = st.number_input("Novo Aporte (USD)", min_value=0.0,
+                                 value=0.0, step=10.0, format="%.2f")
+        b1, b2 = st.columns(2)
+        with b1:
+            salvar_cap = st.form_submit_button("💾 Capital", use_container_width=True)
+        with b2:
+            add_aporte = st.form_submit_button("➕ Aporte", use_container_width=True)
+
+        if salvar_cap:
             try:
                 save_capital(usuario_id, cap)
                 st.session_state["initial_capital"] = cap
-                st.success("Salvo!")
+                st.success("Capital salvo!")
             except Exception:
                 st.error("Erro ao salvar.")
+        if add_aporte and aporte > 0:
+            try:
+                save_aporte(usuario_id, aporte)
+                st.session_state["deposit_total"] = st.session_state.get("deposit_total", 0.0) + aporte
+                st.session_state["deposit_events"] = st.session_state.get("deposit_events", []) + [(datetime.now(timezone.utc), aporte)]
+                st.success(f"Aporte de $ {aporte:,.2f} registrado!")
+            except Exception:
+                st.error("Erro ao salvar aporte.")
+
+    st.caption(f"Total em aportes: $ {st.session_state.get('deposit_total', 0.0):,.2f}")
 
     st.divider()
     st.subheader("💾 Exportar")
@@ -512,51 +533,12 @@ with st.sidebar:
     if st.button("🔄 Sincronizar", use_container_width=True):
         try:
             st.session_state["df_trades"] = load_trades(usuario_id)
+            dt, de = load_deposits(usuario_id)
+            st.session_state["deposit_total"] = dt
+            st.session_state["deposit_events"] = de
             st.rerun()
         except Exception:
             st.error("Erro ao sincronizar.")
-
-    st.divider()
-    st.subheader("📱 Redes")
-
-    st.markdown(
-        """
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
-            <a href="https://wa.me/SEUNUMERO" target="_blank"
-               style="display:inline-flex;align-items:center;gap:8px;background-color:#25D366;color:white;padding:10px 16px;border-radius:10px;text-decoration:none;font-weight:bold;font-size:13px;">
-                WhatsApp</a>
-            <a href="https://instagram.com/SEUPERFIL" target="_blank"
-               style="display:inline-flex;align-items:center;gap:8px;background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);color:white;padding:10px 16px;border-radius:10px;text-decoration:none;font-weight:bold;font-size:13px;">
-                Instagram</a>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.divider()
-    st.subheader("🔗 Compartilhar")
-
-    app_url = "https://meu-trade-top.streamlit.app"
-    share = "Estou usando o Trader Analytics Pro!"
-
-    st.markdown(
-        f"""
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
-            <a href="https://wa.me/?text={share}%0A%0A{app_url}" target="_blank"
-               style="display:inline-flex;align-items:center;gap:8px;background-color:#25D366;color:white;padding:10px 14px;border-radius:10px;text-decoration:none;font-weight:bold;font-size:12px;">
-                📤 WhatsApp</a>
-            <a href="https://www.instagram.com/direct/new/?text={share}%20{app_url}" target="_blank"
-               style="display:inline-flex;align-items:center;gap:8px;background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);color:white;padding:10px 14px;border-radius:10px;text-decoration:none;font-weight:bold;font-size:12px;">
-                📤 Instagram</a>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.divider()
-
-    if st.button("🚪 Sair", use_container_width=True):
-        st.logout()
 
 
 # =========================================================
@@ -578,7 +560,10 @@ avg_loss_cash = abs(loss_df["Lucro"].mean()) if loss_count > 0 else 0
 avg_loss_pts = abs(loss_df["Entrada"] - loss_df["SL"]).mean() if loss_count > 0 else 0
 total_profit = df["Lucro"].sum()
 ic = st.session_state["initial_capital"]
-equity = ic + total_profit
+deposit_total = st.session_state.get("deposit_total", 0.0)
+deposit_events = st.session_state.get("deposit_events", [])
+base_capital = ic + deposit_total
+equity = base_capital + total_profit
 win_rate = win_count / len(df) * 100 if len(df) > 0 else 0
 gp = win_df["Lucro"].sum()
 gl = abs(loss_df["Lucro"].sum())
@@ -591,12 +576,17 @@ pf = gp / gl if gl > 0 else 0
 
 st.title("📊 Trader Strategy Analytics Pro")
 
-c1, c2, c3, c4, c5 = st.columns(5)
-c1.metric("💰 Equity", f"$ {equity:,.2f}")
-c2.metric("✅ Vitórias", win_count)
-c3.metric("❌ Derrotas", loss_count)
-c4.metric("🎯 Win Rate", f"{win_rate:.1f}%")
-c5.metric("📈 Profit Factor", f"{pf:.2f}")
+r1, r2, r3, r4 = st.columns(4)
+r1.metric("💰 Capital Inicial", f"$ {ic:,.2f}")
+r2.metric("➕ Total Aportes", f"$ {deposit_total:,.2f}")
+r3.metric("📊 Resultado", f"$ {total_profit:,.2f}")
+r4.metric("💵 Equity Final", f"$ {equity:,.2f}")
+
+s1, s2, s3, s4 = st.columns(4)
+s1.metric("✅ Vitórias", win_count)
+s2.metric("❌ Derrotas", loss_count)
+s3.metric("🎯 Win Rate", f"{win_rate:.1f}%")
+s4.metric("📈 Profit Factor", f"{pf:.2f}")
 
 st.divider()
 
@@ -605,9 +595,9 @@ st.divider()
 # TABS
 # =========================================================
 
-tab_g, tab_i, tab_h, tab_n, tab_p = st.tabs([
+tab_g, tab_i, tab_h, tab_n, tab_p, tab_c = st.tabs([
     "🚀 Graficos", "📚 Insights", "📝 Historico",
-    "➕ Novo Trade", "⭐ Planos",
+    "➕ Novo Trade", "⭐ Planos", "⚙️ Config",
 ])
 
 
@@ -619,38 +609,124 @@ with tab_g:
     if df.empty:
         st.info("Adicione trades para ver graficos.")
     else:
+        # --- Evolucao do capital no tempo (com aportes) ---
+        st.subheader("📈 Evolução do Capital da Conta")
+        eventos = []
+        for _, row in df.iterrows():
+            dtp = pd.to_datetime(row["Data"], errors="coerce")
+            if pd.notna(dtp):
+                eventos.append((dtp.to_pydatetime(), float(row["Lucro"])))
+        for dtp, amt in deposit_events:
+            eventos.append((dtp, float(amt)))
+        eventos.sort(key=lambda e: e[0])
+
+        if eventos:
+            datas = [e[0] for e in eventos]
+            deltas = [e[1] for e in eventos]
+            curva = [ic] + list(ic + np.cumsum(deltas))
+            datas = [datas[0]] + datas
+            fig_ev = px.line(x=datas, y=curva, markers=True,
+                             title="Crescimento da Conta (tempo real)",
+                             labels={"x": "Data", "y": "Saldo (USD)"},
+                             template=PLOTLY_TEMPLATE,
+                             color_discrete_sequence=["#3fb950"])
+            st.plotly_chart(fig_ev, use_container_width=True)
+            st.caption("📌 Eixo X: data de cada operação e aporte | Eixo Y: saldo real da conta em dólares (capital inicial + aportes + resultado acumulado).")
+        else:
+            st.info("Sem datas válidas para montar a evolução.")
+
+        st.divider()
+
+        # --- Ganho medio por trade ---
         a, b = st.columns(2)
         with a:
-            eq = ic + df["Lucro"].cumsum()
-            fig1 = px.area(x=list(range(1, len(eq)+1)), y=eq,
-                           title="Crescimento da Conta",
-                           labels={"x": "Trade", "y": "Equity"},
-                           template="plotly_dark")
-            st.plotly_chart(fig1, use_container_width=True)
+            gm = df["Lucro"].expanding().mean().reset_index(drop=True)
+            fig_gm = px.bar(x=list(range(1, len(gm) + 1)), y=gm,
+                            title="Ganho Médio por Trade",
+                            labels={"x": "Nº do Trade", "y": "Média (USD)"},
+                            template=PLOTLY_TEMPLATE,
+                            color_discrete_sequence=["#58a6ff"])
+            st.plotly_chart(fig_gm, use_container_width=True)
+            st.caption("📌 Eixo X: quantidade de trades realizados | Eixo Y: ganho médio acumulado por trade em dólares.")
         with b:
+            ml = win_df["Lucro"].expanding().mean().reset_index(drop=True)
+            if len(ml) > 0:
+                fig_ml = px.bar(x=list(range(1, len(ml) + 1)), y=ml,
+                                title="Média de Lucro (só vencedores)",
+                                labels={"x": "Nº do Trade Vencedor", "y": "Média (USD)"},
+                                template=PLOTLY_TEMPLATE,
+                                color_discrete_sequence=["#3fb950"])
+                st.plotly_chart(fig_ml, use_container_width=True)
+                st.caption("📌 Eixo X: sequência de trades vencedores | Eixo Y: valor médio de lucro em dólares dos trades positivos.")
+            else:
+                st.info("Nenhum trade vencedor ainda.")
+
+        c, d = st.columns(2)
+        with c:
+            ga = df["Lucro"].cumsum().reset_index(drop=True)
+            fig_ga = px.bar(x=list(range(1, len(ga) + 1)), y=ga,
+                            title="Ganhos Acumulados",
+                            labels={"x": "Nº do Trade", "y": "Lucro Acumulado (USD)"},
+                            template=PLOTLY_TEMPLATE,
+                            color_discrete_sequence=["#d29922"])
+            st.plotly_chart(fig_ga, use_container_width=True)
+            st.caption("📌 Eixo X: quantidade de trades | Eixo Y: lucro total acumulado em dólares até aquele trade.")
+        with d:
             rdf = df.copy()
             rdf["Risco"] = abs(rdf["Entrada"] - rdf["SL"])
             fig2 = px.bar(rdf, x="Ativo", y="Risco",
                           title="Risco por Trade",
                           color_discrete_sequence=["#f85149"],
-                          template="plotly_dark")
+                          template=PLOTLY_TEMPLATE)
             st.plotly_chart(fig2, use_container_width=True)
+            st.caption("📌 Eixo X: ativo operado | Eixo Y: distância Entrada→SL (risco assumido).")
 
+        st.divider()
+
+        # --- Projecao juros compostos (Pro) ---
         if is_pro:
-            c, d = st.columns(2)
-            with c:
+            st.subheader("🧮 Projeção de Crescimento (Juros Compostos)")
+            if len(df) > 0 and base_capital > 0:
+                avg_per_trade = total_profit / len(df)
+                rate = avg_per_trade / base_capital
+                custom_n = st.number_input("Quantidade de trades para projetar",
+                                           min_value=1, value=100, step=10)
+                counts = sorted(set([10, 50, 100, 250, 500, 1000, int(custom_n)]))
+                rows = []
+                for n in counts:
+                    proj = base_capital * ((1 + rate) ** n)
+                    rows.append({
+                        "Trades": n,
+                        "Equity Projetado": round(proj, 2),
+                        "Lucro Projetado": round(proj - base_capital, 2),
+                    })
+                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                st.caption(
+                    f"📌 Taxa média por trade: {rate * 100:.2f}% "
+                    f"(lucro médio $ {avg_per_trade:.2f} sobre capital base $ {base_capital:,.2f}). "
+                    "Fórmula: Equity = Capital Base × (1 + taxa) ^ nº trades. "
+                    "Projeção teórica baseada no histórico; não garante resultados."
+                )
+                if rate <= 0:
+                    st.warning("Seu resultado médio atual é negativo ou zero — a projeção mostra o impacto de manter esse desempenho.")
+            else:
+                st.info("Registre trades para calcular a projeção.")
+
+            st.divider()
+            e, f = st.columns(2)
+            with e:
                 fig3 = px.pie(names=["Vitorias", "Derrotas"],
                               values=[win_count, loss_count],
                               title="Distribuicao",
-                              template="plotly_dark",
+                              template=PLOTLY_TEMPLATE,
                               color_discrete_sequence=["#3fb950", "#f85149"])
                 st.plotly_chart(fig3, use_container_width=True)
-            with d:
+            with f:
                 ap = df.groupby("Ativo")["Lucro"].sum().reset_index()
                 fig4 = px.bar(ap, x="Ativo", y="Lucro",
                               title="Lucro por Ativo",
                               color_discrete_sequence=["#58a6ff"],
-                              template="plotly_dark")
+                              template=PLOTLY_TEMPLATE)
                 st.plotly_chart(fig4, use_container_width=True)
 
 
@@ -771,8 +847,8 @@ with tab_h:
                                           format="%.3f")
                     eob = st.text_area("Obs", value=r["Obs"],
                                        max_chars=500)
-                    s1, s2 = st.columns(2)
-                    with s1:
+                    s1b, s2b = st.columns(2)
+                    with s1b:
                         if st.form_submit_button("💾 Salvar",
                                                   type="primary",
                                                   use_container_width=True):
@@ -790,7 +866,7 @@ with tab_h:
                                 st.rerun()
                             except Exception:
                                 st.error("Erro ao salvar.")
-                    with s2:
+                    with s2b:
                         if st.form_submit_button("❌ Cancelar",
                                                   use_container_width=True):
                             st.session_state.pop("editing_trade_id", None)
@@ -832,19 +908,19 @@ with tab_n:
     else:
         with st.form("add_trade", clear_on_submit=True):
             st.subheader("Registrar Operacao")
-            r1, r2, r3, r4 = st.columns(4)
-            at = r1.text_input("Ativo",
+            r1b, r2b, r3b, r4b = st.columns(4)
+            at = r1b.text_input("Ativo",
                                value=st.session_state.get("last_asset", "USDJPY"))
-            tt = r2.selectbox("Tipo", ["buy", "sell"])
-            vl = r3.number_input("Volume", min_value=0.01,
+            tt = r2b.selectbox("Tipo", ["buy", "sell"])
+            vl = r3b.number_input("Volume", min_value=0.01,
                                  value=0.01, step=0.01, format="%.2f")
-            pr = r4.number_input("Lucro (USD)", value=0.0, format="%.2f")
+            pr = r4b.number_input("Lucro (USD)", value=0.0, format="%.2f")
             st.divider()
-            r5, r6, r7, r8 = st.columns(4)
-            en = r5.number_input("Entrada", value=0.0, format="%.3f")
-            ex = r6.number_input("Saida", value=0.0, format="%.3f")
-            sl = r7.number_input("SL", value=0.0, format="%.3f")
-            tp = r8.number_input("TP", value=0.0, format="%.3f")
+            r5b, r6b, r7b, r8b = st.columns(4)
+            en = r5b.number_input("Entrada", value=0.0, format="%.3f")
+            ex = r6b.number_input("Saida", value=0.0, format="%.3f")
+            sl = r7b.number_input("SL", value=0.0, format="%.3f")
+            tp = r8b.number_input("TP", value=0.0, format="%.3f")
             ob = st.text_area("Observacao", max_chars=500)
 
             if st.form_submit_button("💾 SALVAR TRADE",
@@ -939,3 +1015,70 @@ with tab_p:
     st.dataframe(comp, use_container_width=True, hide_index=True)
     st.divider()
     st.caption("Finalidade informativa. Nao garante resultados.")
+
+
+# =========================================================
+# CONFIG
+# =========================================================
+
+with tab_c:
+    st.title("⚙️ Configurações")
+
+    c_left, c_right = st.columns(2)
+
+    with c_left:
+        st.subheader("🎨 Aparência")
+        theme = st.radio("Tema do aplicativo", ["🌙 Noite", "☀️ Dia"],
+                         horizontal=True, key="theme_sel")
+        if theme != st.session_state["theme_mode"]:
+            st.session_state["theme_mode"] = theme
+            st.rerun()
+        st.caption("Aplicado em todo o aplicativo.")
+
+        st.divider()
+        st.subheader("👤 Conta")
+        st.markdown(f"""
+        <div class="plan-card">
+            <h4>{usuario_nome}</h4>
+            <p>{usuario_email}</p>
+        </div>""", unsafe_allow_html=True)
+        if owner:
+            st.success("🛡️ Dev — Pro permanente")
+        elif is_pro:
+            st.success("⭐ Pro ativo")
+        else:
+            st.info("🆓 Plano Gratuito — limite de 10 trades")
+
+    with c_right:
+        st.subheader("🔗 Compartilhar")
+        app_url = "https://meu-trade-top.streamlit.app"
+        share = "Estou usando o Trader Analytics Pro!"
+        st.markdown(
+            f"""
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+                <a href="https://wa.me/?text={share}%0A%0A{app_url}" target="_blank"
+                   style="display:inline-flex;align-items:center;gap:8px;background-color:#25D366;color:white;padding:10px 14px;border-radius:10px;text-decoration:none;font-weight:bold;font-size:12px;">
+                    📤 WhatsApp</a>
+                <a href="https://www.instagram.com/direct/new/?text={share}%20{app_url}" target="_blank"
+                   style="display:inline-flex;align-items:center;gap:8px;background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);color:white;padding:10px 14px;border-radius:10px;text-decoration:none;font-weight:bold;font-size:12px;">
+                    📤 Instagram</a>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.divider()
+        st.subheader("📱 Redes")
+        st.markdown(
+            """
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+                <a href="https://wa.me/SEUNUMERO" target="_blank"
+                   style="display:inline-flex;align-items:center;gap:8px;background-color:#25D366;color:white;padding:10px 16px;border-radius:10px;text-decoration:none;font-weight:bold;font-size:13px;">
+                    WhatsApp</a>
+                <a href="https://instagram.com/SEUPERFIL" target="_blank"
+                   style="display:inline-flex;align-items:center;gap:8px;background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);color:white;padding:10px 16px;border-radius:10px;text-decoration:none;font-weight:bold;font-size:13px;">
+                    Instagram</a>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.divider()
+        if st.button("🚪 Sair da conta", use_container_width=True):
+            st.logout()
