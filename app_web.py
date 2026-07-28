@@ -1,12 +1,3 @@
-Perfeito, consegui juntar **tudo** o que você pediu em uma versão só: tema em um lugar só (aba ⚙️ Config), sem bug de mistura, campo de **aporte**, novas **métricas**, os **4 gráficos** com explicação dos eixos e a **tabela de projeção em juros compostos**.
-
-⚠️ Como houve confusão com edições parciais antes, desta vez **substitua TODO o conteúdo do `app_web.py`** pelo código abaixo (mantive seu login, Firestore, planos e o ID do usuário exatamente como estão, para **não perder seus 6 trades**).
-
----
-
-## 📄 `app_web.py` — versão completa
-
-```python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -165,7 +156,7 @@ db = None
 db_error = ""
 try:
     db = get_firestore()
-    db.collection("users").document("__ping__").get()
+    list(db.collection("users").limit(1).stream())
     cloud_connected = True
 except Exception as e:
     cloud_connected = False
@@ -618,7 +609,6 @@ with tab_g:
     if df.empty:
         st.info("Adicione trades para ver graficos.")
     else:
-        # --- Evolucao do capital no tempo (com aportes) ---
         st.subheader("📈 Evolução do Capital da Conta")
         eventos = []
         for _, row in df.iterrows():
@@ -646,7 +636,6 @@ with tab_g:
 
         st.divider()
 
-        # --- Ganho medio por trade ---
         a, b = st.columns(2)
         with a:
             gm = df["Lucro"].expanding().mean().reset_index(drop=True)
@@ -692,7 +681,6 @@ with tab_g:
 
         st.divider()
 
-        # --- Projecao juros compostos (Pro) ---
         if is_pro:
             st.subheader("🧮 Projeção de Crescimento (Juros Compostos)")
             if len(df) > 0 and base_capital > 0:
@@ -1091,27 +1079,3 @@ with tab_c:
         st.divider()
         if st.button("🚪 Sair da conta", use_container_width=True):
             st.logout()
-```
-
----
-
-## 💾 Para publicar
-1. Substitua **todo** o conteúdo do `app_web.py` no GitHub
-2. Commit/push
-3. `Manage app` > `Reboot`
-
----
-
-## ✅ O que mudou (resumo)
-- **Tema em 1 lugar só**: aba ⚙️ Config (sem mistura, inputs e gráficos seguem o tema)
-- **Cabeçalho limpo**: sem lápis, sem GitHub, sem menu duplicado
-- **Sidebar enxuta**: Conexão, progresso, Capital+Aportes, Exportar, Sincronizar
-- **Aportes**: campo na sidebar + métrica "Total Aportes" + entram no Equity e no gráfico de evolução
-- **8 métricas**: Capital, Aportes, Resultado, Equity, Vitórias, Derrotas, Win Rate, PF
-- **Gráfico Evolução do Capital**: Y = $ real, X = tempo, com legenda dos eixos
-- **3 gráficos de barras** (ganho médio, média de lucro, ganhos acumulados) com X = nº do trade, Y = $, cada um com explicação
-- **Tabela de projeção em juros compostos** (Pro) com taxa média por trade e quantidade personalizada
-
-🔒 **Seus 6 trades e seu ID estão preservados** — não mexi na geração do `usuario_id` nem nas coleções existentes. Aportes começam em $ 0,00 (nova coleção `deposits`).
-
-Me confirma com `✅ Ficou perfeito` ou liste o que quer lapidar (cores, ordem das abas, nome dos gráficos). 🚀
