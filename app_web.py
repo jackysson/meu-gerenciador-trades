@@ -375,6 +375,23 @@ def save_aporte(uid, value):
 
 
 # =========================================================
+# FORMATTERS (projecao)
+# =========================================================
+
+def fmt_money(v):
+    av, sign = abs(v), "-" if v < 0 else ""
+    if av >= 1e12: return f"{sign}$ {av/1e12:,.2f} T"
+    if av >= 1e9:  return f"{sign}$ {av/1e9:,.2f} B"
+    if av >= 1e6:  return f"{sign}$ {av/1e6:,.2f} M"
+    return f"{sign}$ {v:,.2f}"
+
+def fmt_mult(v):
+    if v >= 1e6: return f"{v/1e6:,.2f}M x"
+    if v >= 1e3: return f"{v/1e3:,.1f}K x"
+    return f"{v:,.2f}x"
+
+
+# =========================================================
 # BADGES
 # =========================================================
 
@@ -682,20 +699,7 @@ with tab_g:
         st.divider()
 
         if is_pro:
-                       st.subheader("🧮 Projeção de Crescimento")
-
-            def fmt_money(v):
-                av, sign = abs(v), "-" if v < 0 else ""
-                if av >= 1e12: return f"{sign}$ {av/1e12:,.2f} T"
-                if av >= 1e9:  return f"{sign}$ {av/1e9:,.2f} B"
-                if av >= 1e6:  return f"{sign}$ {av/1e6:,.2f} M"
-                if av >= 1e3 and av < 1e6: return f"{sign}$ {v:,.2f}"
-                return f"{sign}$ {v:,.2f}"
-
-            def fmt_mult(v):
-                if v >= 1e6: return f"{v/1e6:,.2f}M x"
-                if v >= 1e3: return f"{v/1e3:,.1f}K x"
-                return f"{v:,.2f}x"
+            st.subheader("🧮 Projeção de Crescimento")
 
             if len(df) > 0 and base_capital > 0:
                 avg_per_trade = total_profit / len(df)
