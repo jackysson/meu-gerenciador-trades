@@ -578,155 +578,106 @@ if "flash_message" in st.session_state:
 # SIDEBAR (enxuta)
 # =========================================================
 
-st.divider()
-st.subheader("💾 Dados")
+with st.sidebar:
+    st.subheader("☁️ Conexao")
 
-# EXPORTAR
-edf = st.session_state.get("df_trades", pd.DataFrame(columns=TRADE_COLUMNS))
-ecols = [c for c in TRADE_COLUMNS if c != "id"]
-csv = edf[ecols].to_csv(index=False).encode("utf-8")
-st.download_button(
-    "📥 Exportar CSV",
-    data=csv,
-    file_name="meus_trades.csv",
-    mime="text/csv",
-    use_container_width=True
-)
+    if cloud_connected:
+        st.markdown('<div class="connection-ok">✅ Nuvem Conectada</div>',
+                     unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="connection-off">⚠️ Modo Offline</div>',
+                     unsafe_allow_html=True)
 
-# IMPORTAR CSV
-arquivo = st.file_uploader(
-    "📤 Importar CSV",
-    type=["csv"],
-    key="csv_uploader_sidebar"
-)
+    st.divider()
+    cur = len(st.session_state["df_trades"])
 
-if arquivo is not None:
-    try:
-        df_import = pd.read_csv(arquivo)
-        df_import.columns = [c.strip() for c in df_import.columns]
+    if not is_pro:
+        rem = max(0, FREE_TRADE_LIMIT - cur)
+        st.progress(min(cur / FREE_TRADE_LIMIT, 1.0),
+                     text=f"{cur}/{FREE_TRADE_LIMIT} trades")
+        st.caption(f"Restam {rem} trade(s).")
+        if cur >= FREE_TRADE_LIMIT:
+            st.warning("Limite atingido.")
+    else:
+        st.caption(f"{cur} trade(s) registrados.")
 
-        colunas_obrig = ["Ativo", "Tipo", "Lucro"]
-        colunas_faltando = [c for c in colunas_obrig if c not in df_import.columns]
+    st.divider()
+    st.subheader("💰 Capital & Aportes")
 
-        if colunas_faltando:
-            st.error(f"❌ Colunas faltando: {', '.join(colunas_faltando)}")
+    with st.form("capital_form"):
+        cap = st.number_input("Capital Inicial (USD)", min_value=0.0,
+                              value=float(st.session_state["initial_capital"]),
+                              step=1.0, format="%.2f")
+        aporte = st.number_input("Novo Aporte (USD)", min_value=0.0,
+                                 value=0.0, step=10.0, format="%.2f")
+        b1, b2 = st.columns(2)
+        with b1:
+            salvar_cap = st.form_submit_button("💾 Capital", use_container_width=True)
+        with b2:
+            add_aporte = st.form_submit_button("➕ Aporte", use_container_width=True)
+
+        if salvar_cap:
+            try:
+                save_capital(usuario_id, cap)
+                st.session_state["initial_capital"] = cap
+                st.success("Capital salvo!")
+            except Exception:
+                st.error("Erro ao salvar.")
+        if add_aporte and aporte > 0:
+            try:
+                save_aporte(usuario_id, aporte)
+                st.session_state["deposit_total"] = st.session_state.get("deposit_total", 0.0) + aporte
+                st.session_state["deposit_events"] = st.session_state.get("deposit_events", []) + [(datetime.now(timezone.utc), aporte)]
+                st.success(f"Aporte de $ {aporte:,.2f} registrado!")
+            except Exception:
+                st.error("Erro ao salvar aporte.")
+
+    st.caption(f"Total em aportes: $ {st.session_state.get('deposit_total', 0.0):,.2f}")
+
+    st.divider()
+    st.subheader("💾 Exportar / Importar")
+
+    edf = st.session_state.get("df_trades", pd.DataFrame(columns=TRADE_COLUMNS))
+    ecols = [c for c in TRADE_COLUMNS if c != "id"]
+    csv = edf[ecols].to_csv(index=False).encode("utf-8")
+    st.download_button("📥 Baixar CSV", data=csv,
+                       file_name="meus_trades.csv",
+                       mime="text/csv", use_container_width=True)
+
+    up = st.file_uploader("📤 Importar CSV", type=["csv"], key="import_csv")
+    if up is not None:
+        if up.name == st.session_state.get("last_imported_name"):
+            st.caption(f"✅ '{up.name}' já foi importado.")
         else:
-            # Preencher opcionais
-            for col_opt in ["Volume", "Entrada", "Saída", "SL", "TP"]:
-                if col_opt not in df_import.columns:
-                    df_import[col_opt] = 0.0
-            if "Obs" not in df_import.columns:
-                df_import["Obs"] = ""
-
-            st.success(f"✅ {len(df_import)} trades encontrados!")
-
-            # Verificar limite free
-            trades_atuais = len(st.session_state["df_trades"])
-            if not is_pro and (trades_atuais + len(df_import)) > FREE_TRADE_LIMIT:
-                permitidos = FREE_TRADE_LIMIT - trades_atuais
-                st.warning(f"⚠️ Plano gratuito: importando apenas {permitidos} trades.")
-                df_import = df_import.head(permitidos)
-
-            col_imp1, col_imp2 = st.columns(2)
-
-            with col_imp1:
-                if st.button(
-                    f"✅ Importar {len(df_import)}",
-                    type="primary",
-                    use_container_width=True,
-                    key="btn_importar_sidebar"
-                ):
-                    if db is None:
-                        st.error("❌ Sem conexão!")
-                    else:
-                        sucesso = 0
-                        erro = 0
-                        bar = st.progress(0, text="Importando...")
-
-                        for idx, row in df_import.iterrows():
-                            try:
-                                td = {
-                                    "asset": str(row.get("Ativo", "")).strip().upper(),
-                                    "type": str(row.get("Tipo", "buy")).strip().lower(),
-                                    "volume": float(row.get("Volume", 0.01) or 0.01),
-                                    "entry": float(row.get("Entrada", 0) or 0),
-                                    "exit": float(row.get("Saída", row.get("Saida", 0)) or 0),
-                                    "sl": float(row.get("SL", 0) or 0),
-                                    "tp": float(row.get("TP", 0) or 0),
-                                    "profit": float(row.get("Lucro", 0) or 0),
-                                    "observation": str(row.get("Obs", "") or ""),
-                                }
-
-                                if td["type"] not in ("buy", "sell"):
-                                    td["type"] = "buy"
-
-                                ref = db.collection("users").document(usuario_id)
-                                tref = ref.collection("trades").document()
-                                tref.set({
-                                    **td,
-                                    "created_at": firestore.SERVER_TIMESTAMP,
-                                    "updated_at": firestore.SERVER_TIMESTAMP,
-                                })
-                                sucesso += 1
-                                bar.progress(
-                                    sucesso / len(df_import),
-                                    text=f"Importando {sucesso}/{len(df_import)}..."
-                                )
-                            except Exception:
-                                erro += 1
-
-                        # Atualizar contador
-                        snap = db.collection("users").document(usuario_id).get()
-                        count_atual = int(snap.to_dict().get("trade_count", 0)) if snap.exists else 0
-                        db.collection("users").document(usuario_id).set(
-                            {"trade_count": count_atual + sucesso,
-                             "updated_at": firestore.SERVER_TIMESTAMP},
-                            merge=True
-                        )
-
+            try:
+                parsed = parse_imported_csv(up)
+            except Exception as e:
+                st.error(f"❌ CSV inválido: {e}")
+                parsed = []
+            if parsed:
+                st.caption(f"🔎 {len(parsed)} trade(s) encontrado(s) no arquivo.")
+                if st.button("✅ Confirmar importação", type="primary", use_container_width=True):
+                    try:
+                        n, skipped = import_trades(usuario_id, usuario_email, parsed)
+                        st.session_state["last_imported_name"] = up.name
                         st.session_state["df_trades"] = load_trades(usuario_id)
-
-                        if sucesso > 0:
-                            st.session_state["flash_message"] = f"✅ {sucesso} trades importados!"
-                        if erro > 0:
-                            st.warning(f"⚠️ {erro} com erro.")
-
+                        if n:
+                            st.success(f"✅ {n} trade(s) importado(s)!")
+                        if skipped:
+                            st.warning(f"⚠️ {skipped} ignorado(s) pelo limite do plano gratuito.")
                         st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao importar: {e}")
 
-            with col_imp2:
-                if st.button(
-                    "❌ Cancelar",
-                    use_container_width=True,
-                    key="btn_cancelar_sidebar"
-                ):
-                    st.rerun()
-
-    except Exception as e:
-        st.error(f"❌ Erro: {e}")
-
-# Download do modelo
-st.download_button(
-    "📋 Baixar modelo CSV",
-    data=pd.DataFrame([
-        {"Ativo": "USDJPY", "Tipo": "buy",  "Volume": 0.01,
-         "Entrada": 149.5, "Saída": 150.0, "SL": 149.0,
-         "TP": 150.5, "Lucro": 5.00, "Obs": "exemplo ganho"},
-        {"Ativo": "EURUSD", "Tipo": "sell", "Volume": 0.02,
-         "Entrada": 1.085, "Saída": 1.080, "SL": 1.090,
-         "TP": 1.078, "Lucro": -3.50, "Obs": "exemplo perda"},
-    ]).to_csv(index=False).encode("utf-8"),
-    file_name="modelo_trades.csv",
-    mime="text/csv",
-    use_container_width=True,
-    key="download_template_sidebar"
-)
-
-if st.button("🔄 Sincronizar", use_container_width=True):
-    try:
-        st.session_state["df_trades"] = load_trades(usuario_id)
-        st.rerun()
-    except Exception:
-        st.error("Erro ao sincronizar.")
+    if st.button("🔄 Sincronizar", use_container_width=True):
+        try:
+            st.session_state["df_trades"] = load_trades(usuario_id)
+            dt, de = load_deposits(usuario_id)
+            st.session_state["deposit_total"] = dt
+            st.session_state["deposit_events"] = de
+            st.rerun()
+        except Exception:
+            st.error("Erro ao sincronizar.")
 
 
 # =========================================================
@@ -1032,47 +983,6 @@ with tab_i:
 # =========================================================
 
 with tab_h:
-    st.subheader("📥 Importar CSV")
-    up = st.file_uploader("Envie um CSV no formato exportado pelo app",
-                          type=["csv"], key="import_csv")
-    if up is not None:
-        if up.name == st.session_state.get("last_imported_name"):
-            st.success(f"Arquivo '{up.name}' já foi importado. Envie outro arquivo para importar mais trades.")
-        else:
-            try:
-                parsed = parse_imported_csv(up)
-            except Exception as e:
-                st.error(f"❌ Não foi possível ler o CSV: {e}")
-                parsed = []
-            if parsed:
-                st.info(f"🔎 {len(parsed)} trade(s) encontrado(s) no arquivo. Confira abaixo:")
-                prev = pd.DataFrame([{
-                    "Ativo": r["asset"], "Tipo": r["type"], "Volume": r["volume"],
-                    "Entrada": r["entry"], "Saída": r["exit"], "SL": r["sl"],
-                    "TP": r["tp"], "Lucro": r["profit"], "Obs": r["observation"],
-                } for r in parsed])
-                st.dataframe(prev, use_container_width=True, hide_index=True)
-                ci, cx = st.columns(2)
-                with ci:
-                    if st.button("✅ Confirmar importação", type="primary", use_container_width=True):
-                        try:
-                            n, skipped = import_trades(usuario_id, usuario_email, parsed)
-                            st.session_state["last_imported_name"] = up.name
-                            st.session_state["df_trades"] = load_trades(usuario_id)
-                            if n:
-                                st.success(f"✅ {n} trade(s) importado(s)!")
-                            if skipped:
-                                st.warning(f"⚠️ {skipped} trade(s) ignorado(s) pelo limite do plano gratuito.")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Erro ao importar: {e}")
-                with cx:
-                    if st.button("❌ Cancelar", use_container_width=True):
-                        st.rerun()
-            else:
-                st.warning("Nenhum trade válido encontrado no arquivo.")
-    st.divider()
-
     if df.empty:
         st.info("Nenhum trade.")
     else:
