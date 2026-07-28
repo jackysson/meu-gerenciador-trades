@@ -1,8 +1,8 @@
-streamlit>=1.42
+streamlit
 pandas
-plotly
 numpy
+plotly
 google-cloud-firestore
 google-auth
-authlib>=1.3.2
-requests
+authlib
+httpx
