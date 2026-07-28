@@ -1,12 +1,21 @@
+Perfeito, consegui juntar **tudo** o que você pediu em uma versão só: tema em um lugar só (aba ⚙️ Config), sem bug de mistura, campo de **aporte**, novas **métricas**, os **4 gráficos** com explicação dos eixos e a **tabela de projeção em juros compostos**.
+
+⚠️ Como houve confusão com edições parciais antes, desta vez **substitua TODO o conteúdo do `app_web.py`** pelo código abaixo (mantive seu login, Firestore, planos e o ID do usuário exatamente como estão, para **não perder seus 6 trades**).
+
+---
+
+## 📄 `app_web.py` — versão completa
+
+```python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 import numpy as np
 
 from datetime import datetime, timezone
 from google.cloud import firestore
 from google.oauth2 import service_account
+
 
 # =========================================================
 # CONFIG
@@ -26,23 +35,9 @@ TRADE_COLUMNS = [
     "Entrada", "Saída", "SL", "TP", "Lucro", "Obs",
 ]
 
-# =========================================================
-# CSS GLOBAL - ESCONDER ELEMENTOS DO STREAMLIT
-# =========================================================
-
-st.markdown("""
-    <style>
-    [data-testid="stToolbar"] { display: none !important; }
-    #MainMenu { display: none !important; }
-    footer { display: none !important; }
-    header[data-testid="stHeader"] { display: none !important; }
-    [data-testid="stDeployButton"] { display: none !important; }
-    .main .block-container { padding-top: 1rem !important; }
-    </style>
-""", unsafe_allow_html=True)
 
 # =========================================================
-# LOGIN CHECK
+# LOGIN CHECK & PAGE
 # =========================================================
 
 try:
@@ -57,17 +52,20 @@ if not is_user_logged_in:
         "desempenho e analise seus resultados."
     )
     st.info("🔐 Clique abaixo para entrar com sua conta Google.")
+
     try:
         st.login()
     except Exception as erro:
         st.error(f"⚠️ Erro ao iniciar login: {erro}")
         st.info("💡 Verifique a seção [auth] nos Secrets do Streamlit Cloud.")
+
     st.divider()
     st.caption("Não oferece recomendação de investimento.")
     st.stop()
 
+
 # =========================================================
-# USER DATA
+# USER DATA (apos login)
 # =========================================================
 
 try:
@@ -82,74 +80,57 @@ if not usuario_email:
     st.error("❌ E-mail não encontrado na autenticação.")
     st.stop()
 
+
 # =========================================================
-# THEME - SEM RERUN, USA ST.SESSION_STATE
+# THEME (unico seletor: aba Config)
 # =========================================================
 
 if "theme_mode" not in st.session_state:
     st.session_state["theme_mode"] = "🌙 Noite"
 
-def apply_theme(mode):
-    if mode == "☀️ Dia":
-        st.markdown("""
+PLOTLY_TEMPLATE = "plotly_dark" if st.session_state["theme_mode"] == "🌙 Noite" else "plotly_white"
+
+if st.session_state["theme_mode"] == "☀️ Dia":
+    st.markdown("""
         <style>
-        .stApp { background-color: #f5f7fa !important; color: #1a1a2e !important; }
-        section[data-testid="stSidebar"] { background-color: #e8ecf0 !important; }
-        section[data-testid="stSidebar"] * { color: #1a1a2e !important; }
-        [data-testid="stMetricValue"] { font-size: 26px !important; color: #0066cc !important; }
-        [data-testid="stMetricLabel"] { color: #444444 !important; }
-        .stMetric { background-color: #ffffff !important; padding: 15px; border-radius: 12px; border: 1px solid #dee2e6; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
-        .insight-card { background-color: #f0f7ff !important; padding: 20px; border-radius: 10px; border-left: 5px solid #0066cc; margin-bottom: 15px; color: #1a1a2e !important; }
-        .badge-card { background-color: #ffffff !important; padding: 18px; border-radius: 12px; border: 1px solid #dee2e6; min-height: 160px; margin-bottom: 12px; color: #1a1a2e !important; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
-        .plan-card { background-color: #ffffff !important; padding: 25px; border-radius: 14px; border: 1px solid #dee2e6; margin-bottom: 15px; color: #1a1a2e !important; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+        #MainMenu, [data-testid="stToolbar"], [data-testid="stFooter"], footer {visibility: hidden !important; display: none !important;}
+        .stApp { background-color: #ffffff !important; }
+        section[data-testid="stSidebar"] { background-color: #f0f2f6 !important; }
+        h1, h2, h3, h4, h5, h6, p, span, label, li, td, th { color: #1a1a2e !important; }
+        .stMetric { background-color: #f8f9fa !important; padding: 15px; border-radius: 12px; border: 1px solid #dee2e6; }
+        .stTextInput input, .stNumberInput input, .stTextArea textarea {
+            background-color: #ffffff !important; color: #1a1a2e !important; border-color: #ced4da !important; }
+        .stSelectbox [data-baseweb="select"] { background-color: #ffffff !important; }
+        [data-baseweb="popover"], [data-baseweb="menu"] { background-color: #ffffff !important; }
+        .stForm { background-color: #f8f9fa !important; border: 1px solid #dee2e6 !important; border-radius: 12px !important; padding: 15px !important; }
+        .insight-card { background-color: #f0f7ff !important; padding: 20px; border-radius: 10px; border-left: 5px solid #0066cc; margin-bottom: 15px; }
+        .badge-card { background-color: #f8f9fa !important; padding: 18px; border-radius: 12px; border: 1px solid #dee2e6; min-height: 160px; margin-bottom: 12px; }
+        .plan-card { background-color: #f8f9fa !important; padding: 25px; border-radius: 14px; border: 1px solid #dee2e6; margin-bottom: 15px; }
         .connection-ok { background-color: #d4edda; color: #155724; padding: 10px 16px; border-radius: 10px; border: 1px solid #c3e6cb; font-weight: bold; font-size: 14px; margin-bottom: 10px; }
         .connection-off { background-color: #fff3cd; color: #856404; padding: 10px 16px; border-radius: 10px; border: 1px solid #ffeeba; font-weight: bold; font-size: 14px; margin-bottom: 10px; }
-        .chart-caption { color: #555555 !important; font-size: 13px; text-align: center; margin-top: -10px; margin-bottom: 20px; }
-        h1, h2, h3, h4, h5, h6, p, span, label, li, td, th { color: #1a1a2e !important; }
-        .stAlert > div { color: #1a1a2e !important; }
-        .stTabs [data-baseweb="tab"] { color: #555555 !important; }
-        .stTabs [aria-selected="true"] { color: #0066cc !important; font-weight: bold; }
-        .stTextInput label, .stNumberInput label, .stSelectbox label, .stTextArea label, .stRadio label, .stForm label { color: #333333 !important; }
-        .stForm { background-color: #ffffff !important; border: 1px solid #dee2e6 !important; border-radius: 12px !important; padding: 15px !important; }
         </style>
         """, unsafe_allow_html=True)
-    else:
-        st.markdown("""
+else:
+    st.markdown("""
         <style>
+        #MainMenu, [data-testid="stToolbar"], [data-testid="stFooter"], footer {visibility: hidden !important; display: none !important;}
         .stApp { background-color: #0d1117 !important; color: #e6edf3 !important; }
         section[data-testid="stSidebar"] { background-color: #161b22 !important; }
-        section[data-testid="stSidebar"] * { color: #e6edf3 !important; }
-        [data-testid="stMetricValue"] { font-size: 26px !important; color: #58a6ff !important; }
-        [data-testid="stMetricLabel"] { color: #8b949e !important; }
+        h1, h2, h3, h4, h5, h6, p, span, label, li, td, th, div { color: #c9d1d9 !important; }
         .stMetric { background-color: #161b22 !important; padding: 15px; border-radius: 12px; border: 1px solid #30363d; }
-        .insight-card { background-color: #1c2128 !important; padding: 20px; border-radius: 10px; border-left: 5px solid #58a6ff; margin-bottom: 15px; color: #e6edf3 !important; }
-        .badge-card { background-color: #161b22 !important; padding: 18px; border-radius: 12px; border: 1px solid #30363d; min-height: 160px; margin-bottom: 12px; color: #e6edf3 !important; }
-        .plan-card { background-color: #161b22 !important; padding: 25px; border-radius: 14px; border: 1px solid #30363d; margin-bottom: 15px; color: #e6edf3 !important; }
+        .stTextInput input, .stNumberInput input, .stTextArea textarea {
+            background-color: #0d1117 !important; color: #e6edf3 !important; border-color: #30363d !important; }
+        .stSelectbox [data-baseweb="select"] { background-color: #0d1117 !important; color: #e6edf3 !important; }
+        [data-baseweb="popover"], [data-baseweb="menu"] { background-color: #161b22 !important; }
+        .stForm { background-color: #161b22 !important; border: 1px solid #30363d !important; border-radius: 12px !important; padding: 15px !important; }
+        .insight-card { background-color: #1c2128 !important; padding: 20px; border-radius: 10px; border-left: 5px solid #58a6ff; margin-bottom: 15px; }
+        .badge-card { background-color: #161b22 !important; padding: 18px; border-radius: 12px; border: 1px solid #30363d; min-height: 160px; margin-bottom: 12px; }
+        .plan-card { background-color: #161b22 !important; padding: 25px; border-radius: 14px; border: 1px solid #30363d; margin-bottom: 15px; }
         .connection-ok { background-color: #0d2818 !important; color: #3fb950 !important; padding: 10px 16px; border-radius: 10px; border: 1px solid #238636; font-weight: bold; font-size: 14px; margin-bottom: 10px; }
         .connection-off { background-color: #2d1b00 !important; color: #f0883e !important; padding: 10px 16px; border-radius: 10px; border: 1px solid #9e6a03; font-weight: bold; font-size: 14px; margin-bottom: 10px; }
-        .chart-caption { color: #8b949e !important; font-size: 13px; text-align: center; margin-top: -10px; margin-bottom: 20px; }
-        h1, h2, h3, h4, h5, h6 { color: #e6edf3 !important; }
-        p, span, li, td, th, div { color: #c9d1d9 !important; }
-        label, .stMarkdown p { color: #c9d1d9 !important; }
-        .stAlert > div { color: #c9d1d9 !important; }
-        .stWarning > div { color: #e3b341 !important; }
-        .stInfo > div { color: #58a6ff !important; }
-        .stSuccess > div { color: #3fb950 !important; }
-        .stError > div { color: #f85149 !important; }
-        .stTextInput label, .stNumberInput label, .stSelectbox label, .stTextArea label, .stRadio label, .stForm label { color: #e6edf3 !important; }
-        .stTextInput input, .stNumberInput input, .stTextArea textarea { color: #e6edf3 !important; background-color: #0d1117 !important; border-color: #30363d !important; }
-        .stSelectbox [data-baseweb="select"] { color: #e6edf3 !important; background-color: #0d1117 !important; }
-        .stTabs [data-baseweb="tab"] { color: #8b949e !important; }
-        .stTabs [aria-selected="true"] { color: #e6edf3 !important; font-weight: bold; }
-        .stCaption { color: #8b949e !important; }
-        .stDataFrame { color: #e6edf3 !important; }
-        .stProgress > div > div { background-color: #58a6ff !important; }
-        .stForm { background-color: #161b22 !important; border: 1px solid #30363d !important; border-radius: 12px !important; padding: 15px !important; }
-        .streamlit-expanderHeader { color: #e6edf3 !important; }
         </style>
         """, unsafe_allow_html=True)
 
-apply_theme(st.session_state["theme_mode"])
 
 # =========================================================
 # FIRESTORE
@@ -157,21 +138,42 @@ apply_theme(st.session_state["theme_mode"])
 
 @st.cache_resource
 def get_firestore():
-    info = dict(st.secrets["gcp_service_account"])
-    info["private_key"] = info["private_key"].replace("\\n", "\n")
+    if "gcp_service_account" in st.secrets:
+        info = dict(st.secrets["gcp_service_account"])
+    elif "firebase" in st.secrets:
+        info = dict(st.secrets["firebase"])
+    else:
+        raise KeyError("Faltando [gcp_service_account] (ou [firebase]) nos Secrets.")
+
+    pk = info.get("private_key", "")
+    if "\\n" in pk:
+        pk = pk.replace("\\n", "\n")
+    info["private_key"] = pk.strip() + "\n"
+
     creds = service_account.Credentials.from_service_account_info(
         info,
         scopes=["https://www.googleapis.com/auth/cloud-platform"],
     )
-    return firestore.Client(credentials=creds, project=info.get("project_id", ""))
+    return firestore.Client(
+        credentials=creds,
+        project=info.get("project_id", ""),
+    )
+
 
 cloud_connected = False
 db = None
+db_error = ""
 try:
     db = get_firestore()
+    db.collection("users").document("__ping__").get()
     cloud_connected = True
-except Exception:
+except Exception as e:
     cloud_connected = False
+    db_error = f"{type(e).__name__}: {e}"
+
+if not cloud_connected and db_error:
+    st.error(f"🔧 Debug Firestore: {db_error}")
+
 
 # =========================================================
 # PLAN FUNCTIONS
@@ -231,14 +233,11 @@ def has_pro_access(uid, email):
     if not doc.exists:
         return False
     d = doc.to_dict()
-    plan = str(d.get("plan", "")).strip()
-    status = str(d.get("subscription_status", "")).strip()
-    access_type = str(d.get("access_type", "")).strip()
-    if plan != "pro":
+    if str(d.get("plan", "")).strip().lower() != "pro":
         return False
-    if status not in ("active", "trialing"):
+    if str(d.get("subscription_status", "")).strip().lower() not in ("active", "trialing"):
         return False
-    if access_type == "lifetime":
+    if str(d.get("access_type", "")).strip().lower() == "lifetime":
         return True
     exp = normalize_exp(d.get("subscription_expires_at"))
     if exp is None:
@@ -257,12 +256,13 @@ def get_plan_info(uid, email):
     return {
         "is_owner": owner,
         "is_pro": has_pro_access(uid, email),
-        "plan": str(d.get("plan", "free")).strip(),
-        "access_type": str(d.get("access_type", "free")).strip(),
-        "subscription_status": str(d.get("subscription_status", "inactive")).strip(),
+        "plan": d.get("plan", "free"),
+        "access_type": d.get("access_type", "free"),
+        "subscription_status": d.get("subscription_status", "inactive"),
         "subscription_expires_at": normalize_exp(d.get("subscription_expires_at")),
         "trade_count": int(d.get("trade_count", 0)),
     }
+
 
 # =========================================================
 # TRADE FUNCTIONS
@@ -341,30 +341,47 @@ def delete_trade(uid, tid):
     uref.set({"trade_count": max(0, count - 1),
               "updated_at": firestore.SERVER_TIMESTAMP}, merge=True)
 
+
 # =========================================================
-# CAPITAL E APORTES
+# CAPITAL & APORTES
 # =========================================================
 
 def load_capital(uid):
     if db is None:
-        return {"initial_capital": 20.0, "aporte_mensal": 0.0}
+        return 20.0
     doc = db.collection("users").document(uid).collection("settings").document("profile").get()
-    if doc.exists:
-        d = doc.to_dict()
-        return {
-            "initial_capital": float(d.get("initial_capital", 20.0)),
-            "aporte_mensal": float(d.get("aporte_mensal", 0.0)),
-        }
-    return {"initial_capital": 20.0, "aporte_mensal": 0.0}
+    return float(doc.to_dict().get("initial_capital", 20.0)) if doc.exists else 20.0
 
-def save_capital(uid, cap, aporte):
+def save_capital(uid, cap):
     if db is None:
         raise RuntimeError("Banco indisponível.")
     db.collection("users").document(uid).collection("settings").document("profile").set({
         "initial_capital": float(cap),
-        "aporte_mensal": float(aporte),
         "updated_at": firestore.SERVER_TIMESTAMP,
     }, merge=True)
+
+def load_deposits(uid):
+    if db is None:
+        return 0.0, []
+    total = 0.0
+    events = []
+    for doc in db.collection("users").document(uid).collection("deposits").stream():
+        d = doc.to_dict()
+        amt = float(d.get("amount", 0))
+        ca = d.get("created_at")
+        total += amt
+        if isinstance(ca, datetime):
+            events.append((ca, amt))
+    return total, events
+
+def save_aporte(uid, value):
+    if db is None:
+        raise RuntimeError("Banco indisponível.")
+    db.collection("users").document(uid).collection("deposits").document().set({
+        "amount": float(value),
+        "created_at": firestore.SERVER_TIMESTAMP,
+    })
+
 
 # =========================================================
 # BADGES
@@ -394,6 +411,7 @@ def calc_badges(df):
         b.append({"icon": "💎", "name": "Sólido", "desc": "Lucro com 50+ trades."})
     return b
 
+
 # =========================================================
 # SESSION INIT
 # =========================================================
@@ -408,8 +426,9 @@ else:
 
 if st.session_state.get("active_user_id") != usuario_id:
     st.session_state["active_user_id"] = usuario_id
-    for k in ["df_trades", "initial_capital", "aporte_mensal", "last_asset",
-              "editing_trade_id", "confirm_delete_id"]:
+    for k in ["df_trades", "initial_capital", "last_asset",
+              "editing_trade_id", "confirm_delete_id",
+              "deposit_total", "deposit_events"]:
         st.session_state.pop(k, None)
 
 if "df_trades" not in st.session_state:
@@ -421,12 +440,18 @@ if "df_trades" not in st.session_state:
 
 if "initial_capital" not in st.session_state:
     try:
-        cap_data = load_capital(usuario_id)
-        st.session_state["initial_capital"] = cap_data["initial_capital"]
-        st.session_state["aporte_mensal"] = cap_data["aporte_mensal"]
+        st.session_state["initial_capital"] = load_capital(usuario_id)
     except Exception:
         st.session_state["initial_capital"] = 20.0
-        st.session_state["aporte_mensal"] = 0.0
+
+if "deposit_total" not in st.session_state:
+    try:
+        dt, de = load_deposits(usuario_id)
+        st.session_state["deposit_total"] = dt
+        st.session_state["deposit_events"] = de
+    except Exception:
+        st.session_state["deposit_total"] = 0.0
+        st.session_state["deposit_events"] = []
 
 if "last_asset" not in st.session_state:
     st.session_state["last_asset"] = "USDJPY"
@@ -443,50 +468,28 @@ owner = plan_info["is_owner"]
 if "flash_message" in st.session_state:
     st.success(st.session_state.pop("flash_message"))
 
+
 # =========================================================
-# SIDEBAR - LIMPO E ORGANIZADO
+# SIDEBAR (enxuta)
 # =========================================================
 
 with st.sidebar:
-    # Logo e título
-    st.markdown("### 📊 Trader Analytics Pro")
-    st.divider()
-
-    # Conexão
     st.subheader("☁️ Conexao")
+
     if cloud_connected:
         st.markdown('<div class="connection-ok">✅ Nuvem Conectada</div>',
-                    unsafe_allow_html=True)
+                     unsafe_allow_html=True)
     else:
         st.markdown('<div class="connection-off">⚠️ Modo Offline</div>',
-                    unsafe_allow_html=True)
+                     unsafe_allow_html=True)
 
     st.divider()
-
-    # Conta
-    st.subheader("👤 Conta")
-    st.write(usuario_nome)
-    st.caption(usuario_email)
-
-    if owner:
-        st.success("🛡️ Dev — Pro permanente")
-    elif is_pro:
-        st.success("⭐ Pro — R$ 29,90/mes")
-        exp = plan_info.get("subscription_expires_at")
-        if exp:
-            st.caption(f"Ate {exp.strftime('%d/%m/%Y')}.")
-    else:
-        st.info("🆓 Gratuito")
-        st.caption("Limite de 10 trades.")
-
-    st.divider()
-
-    # Contador de trades
     cur = len(st.session_state["df_trades"])
+
     if not is_pro:
         rem = max(0, FREE_TRADE_LIMIT - cur)
         st.progress(min(cur / FREE_TRADE_LIMIT, 1.0),
-                    text=f"{cur}/{FREE_TRADE_LIMIT} trades")
+                     text=f"{cur}/{FREE_TRADE_LIMIT} trades")
         st.caption(f"Restam {rem} trade(s).")
         if cur >= FREE_TRADE_LIMIT:
             st.warning("Limite atingido.")
@@ -494,9 +497,41 @@ with st.sidebar:
         st.caption(f"{cur} trade(s) registrados.")
 
     st.divider()
+    st.subheader("💰 Capital & Aportes")
 
-    # Exportar e Sincronizar
-    st.subheader("💾 Dados")
+    with st.form("capital_form"):
+        cap = st.number_input("Capital Inicial (USD)", min_value=0.0,
+                              value=float(st.session_state["initial_capital"]),
+                              step=1.0, format="%.2f")
+        aporte = st.number_input("Novo Aporte (USD)", min_value=0.0,
+                                 value=0.0, step=10.0, format="%.2f")
+        b1, b2 = st.columns(2)
+        with b1:
+            salvar_cap = st.form_submit_button("💾 Capital", use_container_width=True)
+        with b2:
+            add_aporte = st.form_submit_button("➕ Aporte", use_container_width=True)
+
+        if salvar_cap:
+            try:
+                save_capital(usuario_id, cap)
+                st.session_state["initial_capital"] = cap
+                st.success("Capital salvo!")
+            except Exception:
+                st.error("Erro ao salvar.")
+        if add_aporte and aporte > 0:
+            try:
+                save_aporte(usuario_id, aporte)
+                st.session_state["deposit_total"] = st.session_state.get("deposit_total", 0.0) + aporte
+                st.session_state["deposit_events"] = st.session_state.get("deposit_events", []) + [(datetime.now(timezone.utc), aporte)]
+                st.success(f"Aporte de $ {aporte:,.2f} registrado!")
+            except Exception:
+                st.error("Erro ao salvar aporte.")
+
+    st.caption(f"Total em aportes: $ {st.session_state.get('deposit_total', 0.0):,.2f}")
+
+    st.divider()
+    st.subheader("💾 Exportar")
+
     edf = st.session_state.get("df_trades", pd.DataFrame(columns=TRADE_COLUMNS))
     ecols = [c for c in TRADE_COLUMNS if c != "id"]
     csv = edf[ecols].to_csv(index=False).encode("utf-8")
@@ -507,12 +542,13 @@ with st.sidebar:
     if st.button("🔄 Sincronizar", use_container_width=True):
         try:
             st.session_state["df_trades"] = load_trades(usuario_id)
+            dt, de = load_deposits(usuario_id)
+            st.session_state["deposit_total"] = dt
+            st.session_state["deposit_events"] = de
             st.rerun()
         except Exception:
             st.error("Erro ao sincronizar.")
 
-    st.divider()
-    st.caption("Não oferece recomendação de investimento.")
 
 # =========================================================
 # METRICS
@@ -526,23 +562,22 @@ for col in ["Lucro", "Entrada", "Saída", "SL", "TP", "Volume"]:
     df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
 loss_df = df[df["Lucro"] < 0]
-win_df  = df[df["Lucro"] > 0]
-loss_count     = len(loss_df)
-win_count      = len(win_df)
-total_trades   = len(df)
-avg_loss_cash  = abs(loss_df["Lucro"].mean()) if loss_count > 0 else 0
-avg_loss_pts   = abs(loss_df["Entrada"] - loss_df["SL"]).mean() if loss_count > 0 else 0
-avg_win_cash   = win_df["Lucro"].mean() if win_count > 0 else 0
-avg_trade      = df["Lucro"].mean() if total_trades > 0 else 0
-total_profit   = df["Lucro"].sum()
-ic             = st.session_state["initial_capital"]
-aporte_mensal  = st.session_state.get("aporte_mensal", 0.0)
-equity         = ic + total_profit
-win_rate       = win_count / total_trades * 100 if total_trades > 0 else 0
-gp             = win_df["Lucro"].sum()
-gl             = abs(loss_df["Lucro"].sum())
-pf             = gp / gl if gl > 0 else 0
-roi            = (total_profit / ic * 100) if ic > 0 else 0
+win_df = df[df["Lucro"] > 0]
+loss_count = len(loss_df)
+win_count = len(win_df)
+avg_loss_cash = abs(loss_df["Lucro"].mean()) if loss_count > 0 else 0
+avg_loss_pts = abs(loss_df["Entrada"] - loss_df["SL"]).mean() if loss_count > 0 else 0
+total_profit = df["Lucro"].sum()
+ic = st.session_state["initial_capital"]
+deposit_total = st.session_state.get("deposit_total", 0.0)
+deposit_events = st.session_state.get("deposit_events", [])
+base_capital = ic + deposit_total
+equity = base_capital + total_profit
+win_rate = win_count / len(df) * 100 if len(df) > 0 else 0
+gp = win_df["Lucro"].sum()
+gl = abs(loss_df["Lucro"].sum())
+pf = gp / gl if gl > 0 else 0
+
 
 # =========================================================
 # DASHBOARD
@@ -550,36 +585,30 @@ roi            = (total_profit / ic * 100) if ic > 0 else 0
 
 st.title("📊 Trader Strategy Analytics Pro")
 
-# Linha 1 de métricas
-c1, c2, c3, c4, c5 = st.columns(5)
-c1.metric("💰 Equity", f"$ {equity:,.2f}", f"$ {total_profit:+,.2f}")
-c2.metric("✅ Vitórias", win_count)
-c3.metric("❌ Derrotas", loss_count)
-c4.metric("🎯 Win Rate", f"{win_rate:.1f}%")
-c5.metric("📈 Profit Factor", f"{pf:.2f}")
+r1, r2, r3, r4 = st.columns(4)
+r1.metric("💰 Capital Inicial", f"$ {ic:,.2f}")
+r2.metric("➕ Total Aportes", f"$ {deposit_total:,.2f}")
+r3.metric("📊 Resultado", f"$ {total_profit:,.2f}")
+r4.metric("💵 Equity Final", f"$ {equity:,.2f}")
 
-# Linha 2 de métricas
-c6, c7, c8, c9, c10 = st.columns(5)
-c6.metric("💵 Capital Inicial", f"$ {ic:,.2f}")
-c7.metric("📥 Aporte Mensal", f"$ {aporte_mensal:,.2f}")
-c8.metric("📊 ROI", f"{roi:.1f}%")
-c9.metric("📉 Media por Trade", f"$ {avg_trade:,.2f}")
-c10.metric("🔢 Total Trades", total_trades)
+s1, s2, s3, s4 = st.columns(4)
+s1.metric("✅ Vitórias", win_count)
+s2.metric("❌ Derrotas", loss_count)
+s3.metric("🎯 Win Rate", f"{win_rate:.1f}%")
+s4.metric("📈 Profit Factor", f"{pf:.2f}")
 
 st.divider()
+
 
 # =========================================================
 # TABS
 # =========================================================
 
-tab_g, tab_i, tab_h, tab_n, tab_p, tab_cfg = st.tabs([
-    "🚀 Graficos",
-    "📚 Insights",
-    "📝 Historico",
-    "➕ Novo Trade",
-    "⭐ Planos",
-    "⚙️ Config",
+tab_g, tab_i, tab_h, tab_n, tab_p, tab_c = st.tabs([
+    "🚀 Graficos", "📚 Insights", "📝 Historico",
+    "➕ Novo Trade", "⭐ Planos", "⚙️ Config",
 ])
+
 
 # =========================================================
 # GRAPHS
@@ -587,228 +616,128 @@ tab_g, tab_i, tab_h, tab_n, tab_p, tab_cfg = st.tabs([
 
 with tab_g:
     if df.empty:
-        st.info("Adicione trades para ver os graficos.")
+        st.info("Adicione trades para ver graficos.")
     else:
-        tema_plotly = "plotly_white" if st.session_state["theme_mode"] == "☀️ Dia" else "plotly_dark"
-
-        # ---------------------------------------------------
-        # GRÁFICO 1: Evolução do Capital
-        # ---------------------------------------------------
+        # --- Evolucao do capital no tempo (com aportes) ---
         st.subheader("📈 Evolução do Capital da Conta")
+        eventos = []
+        for _, row in df.iterrows():
+            dtp = pd.to_datetime(row["Data"], errors="coerce")
+            if pd.notna(dtp):
+                eventos.append((dtp.to_pydatetime(), float(row["Lucro"])))
+        for dtp, amt in deposit_events:
+            eventos.append((dtp, float(amt)))
+        eventos.sort(key=lambda e: e[0])
 
-        datas = pd.to_datetime(df["Data"], errors="coerce")
-        eq_vals = (ic + df["Lucro"].cumsum()).tolist()
-
-        fig1 = go.Figure()
-        fig1.add_trace(go.Scatter(
-            x=datas,
-            y=eq_vals,
-            mode="lines+markers",
-            fill="tozeroy",
-            line=dict(color="#58a6ff", width=2),
-            marker=dict(size=6),
-            name="Capital",
-            hovertemplate="Data: %{x}<br>Capital: $ %{y:,.2f}<extra></extra>"
-        ))
-        fig1.add_hline(y=ic, line_dash="dash",
-                       line_color="#f0883e",
-                       annotation_text=f"Capital Inicial: $ {ic:,.2f}")
-        fig1.update_layout(
-            template=tema_plotly,
-            xaxis_title="Data / Tempo",
-            yaxis_title="Capital em Dólares (USD)",
-            height=400,
-            margin=dict(l=40, r=40, t=40, b=40),
-        )
-        st.plotly_chart(fig1, use_container_width=True)
-        st.markdown(
-            '<p class="chart-caption">Eixo X: Data de cada operação | Eixo Y: Valor do capital em dólares (USD)</p>',
-            unsafe_allow_html=True
-        )
+        if eventos:
+            datas = [e[0] for e in eventos]
+            deltas = [e[1] for e in eventos]
+            curva = [ic] + list(ic + np.cumsum(deltas))
+            datas = [datas[0]] + datas
+            fig_ev = px.line(x=datas, y=curva, markers=True,
+                             title="Crescimento da Conta (tempo real)",
+                             labels={"x": "Data", "y": "Saldo (USD)"},
+                             template=PLOTLY_TEMPLATE,
+                             color_discrete_sequence=["#3fb950"])
+            st.plotly_chart(fig_ev, use_container_width=True)
+            st.caption("📌 Eixo X: data de cada operação e aporte | Eixo Y: saldo real da conta em dólares (capital inicial + aportes + resultado acumulado).")
+        else:
+            st.info("Sem datas válidas para montar a evolução.")
 
         st.divider()
 
-        col1, col2 = st.columns(2)
+        # --- Ganho medio por trade ---
+        a, b = st.columns(2)
+        with a:
+            gm = df["Lucro"].expanding().mean().reset_index(drop=True)
+            fig_gm = px.bar(x=list(range(1, len(gm) + 1)), y=gm,
+                            title="Ganho Médio por Trade",
+                            labels={"x": "Nº do Trade", "y": "Média (USD)"},
+                            template=PLOTLY_TEMPLATE,
+                            color_discrete_sequence=["#58a6ff"])
+            st.plotly_chart(fig_gm, use_container_width=True)
+            st.caption("📌 Eixo X: quantidade de trades realizados | Eixo Y: ganho médio acumulado por trade em dólares.")
+        with b:
+            ml = win_df["Lucro"].expanding().mean().reset_index(drop=True)
+            if len(ml) > 0:
+                fig_ml = px.bar(x=list(range(1, len(ml) + 1)), y=ml,
+                                title="Média de Lucro (só vencedores)",
+                                labels={"x": "Nº do Trade Vencedor", "y": "Média (USD)"},
+                                template=PLOTLY_TEMPLATE,
+                                color_discrete_sequence=["#3fb950"])
+                st.plotly_chart(fig_ml, use_container_width=True)
+                st.caption("📌 Eixo X: sequência de trades vencedores | Eixo Y: valor médio de lucro em dólares dos trades positivos.")
+            else:
+                st.info("Nenhum trade vencedor ainda.")
 
-        # ---------------------------------------------------
-        # GRÁFICO 2: Ganho Médio por Trade
-        # ---------------------------------------------------
-        with col1:
-            st.subheader("📊 Ganho Medio por Trade")
-            media_acum = [df["Lucro"].iloc[:i+1].mean() for i in range(len(df))]
-            fig2 = go.Figure()
-            fig2.add_trace(go.Bar(
-                x=list(range(1, len(df)+1)),
-                y=media_acum,
-                marker_color=["#3fb950" if v >= 0 else "#f85149" for v in media_acum],
-                hovertemplate="Trade #%{x}<br>Media: $ %{y:,.2f}<extra></extra>"
-            ))
-            fig2.update_layout(
-                template=tema_plotly,
-                xaxis_title="Numero de Trades",
-                yaxis_title="Media de Lucro (USD)",
-                height=380,
-                margin=dict(l=40, r=40, t=40, b=40),
-            )
+        c, d = st.columns(2)
+        with c:
+            ga = df["Lucro"].cumsum().reset_index(drop=True)
+            fig_ga = px.bar(x=list(range(1, len(ga) + 1)), y=ga,
+                            title="Ganhos Acumulados",
+                            labels={"x": "Nº do Trade", "y": "Lucro Acumulado (USD)"},
+                            template=PLOTLY_TEMPLATE,
+                            color_discrete_sequence=["#d29922"])
+            st.plotly_chart(fig_ga, use_container_width=True)
+            st.caption("📌 Eixo X: quantidade de trades | Eixo Y: lucro total acumulado em dólares até aquele trade.")
+        with d:
+            rdf = df.copy()
+            rdf["Risco"] = abs(rdf["Entrada"] - rdf["SL"])
+            fig2 = px.bar(rdf, x="Ativo", y="Risco",
+                          title="Risco por Trade",
+                          color_discrete_sequence=["#f85149"],
+                          template=PLOTLY_TEMPLATE)
             st.plotly_chart(fig2, use_container_width=True)
-            st.markdown(
-                '<p class="chart-caption">Eixo X: Quantidade de trades | Eixo Y: Media de lucro acumulada em dólares</p>',
-                unsafe_allow_html=True
-            )
-
-        # ---------------------------------------------------
-        # GRÁFICO 3: Lucro por Trade
-        # ---------------------------------------------------
-        with col2:
-            st.subheader("💵 Lucro por Trade")
-            fig3 = go.Figure()
-            fig3.add_trace(go.Bar(
-                x=list(range(1, len(df)+1)),
-                y=df["Lucro"].tolist(),
-                marker_color=["#3fb950" if v >= 0 else "#f85149" for v in df["Lucro"]],
-                hovertemplate="Trade #%{x}<br>Lucro: $ %{y:,.2f}<extra></extra>"
-            ))
-            fig3.update_layout(
-                template=tema_plotly,
-                xaxis_title="Numero do Trade",
-                yaxis_title="Lucro / Prejuizo (USD)",
-                height=380,
-                margin=dict(l=40, r=40, t=40, b=40),
-            )
-            st.plotly_chart(fig3, use_container_width=True)
-            st.markdown(
-                '<p class="chart-caption">Eixo X: Numero do trade | Eixo Y: Valor do lucro ou prejuizo em dólares</p>',
-                unsafe_allow_html=True
-            )
+            st.caption("📌 Eixo X: ativo operado | Eixo Y: distância Entrada→SL (risco assumido).")
 
         st.divider()
 
-        col3, col4 = st.columns(2)
+        # --- Projecao juros compostos (Pro) ---
+        if is_pro:
+            st.subheader("🧮 Projeção de Crescimento (Juros Compostos)")
+            if len(df) > 0 and base_capital > 0:
+                avg_per_trade = total_profit / len(df)
+                rate = avg_per_trade / base_capital
+                custom_n = st.number_input("Quantidade de trades para projetar",
+                                           min_value=1, value=100, step=10)
+                counts = sorted(set([10, 50, 100, 250, 500, 1000, int(custom_n)]))
+                rows = []
+                for n in counts:
+                    proj = base_capital * ((1 + rate) ** n)
+                    rows.append({
+                        "Trades": n,
+                        "Equity Projetado": round(proj, 2),
+                        "Lucro Projetado": round(proj - base_capital, 2),
+                    })
+                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                st.caption(
+                    f"📌 Taxa média por trade: {rate * 100:.2f}% "
+                    f"(lucro médio $ {avg_per_trade:.2f} sobre capital base $ {base_capital:,.2f}). "
+                    "Fórmula: Equity = Capital Base × (1 + taxa) ^ nº trades. "
+                    "Projeção teórica baseada no histórico; não garante resultados."
+                )
+                if rate <= 0:
+                    st.warning("Seu resultado médio atual é negativo ou zero — a projeção mostra o impacto de manter esse desempenho.")
+            else:
+                st.info("Registre trades para calcular a projeção.")
 
-        # ---------------------------------------------------
-        # GRÁFICO 4: Ganhos Acumulados
-        # ---------------------------------------------------
-        with col3:
-            st.subheader("🏆 Ganhos Acumulados")
-            ganhos_acum = df["Lucro"].cumsum().tolist()
-            fig4 = go.Figure()
-            fig4.add_trace(go.Bar(
-                x=list(range(1, len(df)+1)),
-                y=ganhos_acum,
-                marker_color=["#3fb950" if v >= 0 else "#f85149" for v in ganhos_acum],
-                hovertemplate="Trade #%{x}<br>Acumulado: $ %{y:,.2f}<extra></extra>"
-            ))
-            fig4.update_layout(
-                template=tema_plotly,
-                xaxis_title="Numero de Trades",
-                yaxis_title="Lucro Acumulado (USD)",
-                height=380,
-                margin=dict(l=40, r=40, t=40, b=40),
-            )
-            st.plotly_chart(fig4, use_container_width=True)
-            st.markdown(
-                '<p class="chart-caption">Eixo X: Numero de trades | Eixo Y: Total de lucro acumulado em dólares</p>',
-                unsafe_allow_html=True
-            )
+            st.divider()
+            e, f = st.columns(2)
+            with e:
+                fig3 = px.pie(names=["Vitorias", "Derrotas"],
+                              values=[win_count, loss_count],
+                              title="Distribuicao",
+                              template=PLOTLY_TEMPLATE,
+                              color_discrete_sequence=["#3fb950", "#f85149"])
+                st.plotly_chart(fig3, use_container_width=True)
+            with f:
+                ap = df.groupby("Ativo")["Lucro"].sum().reset_index()
+                fig4 = px.bar(ap, x="Ativo", y="Lucro",
+                              title="Lucro por Ativo",
+                              color_discrete_sequence=["#58a6ff"],
+                              template=PLOTLY_TEMPLATE)
+                st.plotly_chart(fig4, use_container_width=True)
 
-        # ---------------------------------------------------
-        # GRÁFICO 5: Distribuição Vitórias x Derrotas
-        # ---------------------------------------------------
-        with col4:
-            st.subheader("🎯 Distribuicao")
-            fig5 = px.pie(
-                names=["Vitorias", "Derrotas", "Neutros"],
-                values=[win_count, loss_count, max(0, total_trades - win_count - loss_count)],
-                color_discrete_sequence=["#3fb950", "#f85149", "#8b949e"],
-                template=tema_plotly,
-            )
-            fig5.update_layout(height=380, margin=dict(l=40, r=40, t=40, b=40))
-            st.plotly_chart(fig5, use_container_width=True)
-            st.markdown(
-                '<p class="chart-caption">Distribuição percentual entre operações vencedoras, perdedoras e neutras</p>',
-                unsafe_allow_html=True
-            )
-
-        st.divider()
-
-        # ---------------------------------------------------
-        # TABELA: Projeção de Juros Compostos
-        # ---------------------------------------------------
-        st.subheader("📐 Projecao de Crescimento - Juros Compostos")
-
-        col_proj1, col_proj2, col_proj3 = st.columns(3)
-
-        with col_proj1:
-            taxa_mensal = st.number_input(
-                "Taxa mensal estimada (%)",
-                min_value=0.1, max_value=100.0,
-                value=float(max(0.1, roi)) if roi > 0 else 5.0,
-                step=0.5, format="%.1f"
-            )
-        with col_proj2:
-            meses_proj = st.number_input(
-                "Periodo (meses)",
-                min_value=1, max_value=120,
-                value=12, step=1
-            )
-        with col_proj3:
-            aporte_proj = st.number_input(
-                "Aporte mensal (USD)",
-                min_value=0.0,
-                value=float(aporte_mensal),
-                step=10.0, format="%.2f"
-            )
-
-        # Calcular projeção
-        taxa = taxa_mensal / 100
-        proj_rows = []
-        saldo = equity
-
-        for mes in range(1, int(meses_proj) + 1):
-            saldo_anterior = saldo
-            rendimento = saldo * taxa
-            saldo = saldo + rendimento + aporte_proj
-            proj_rows.append({
-                "Mes": mes,
-                "Saldo Inicial (USD)": f"$ {saldo_anterior:,.2f}",
-                "Rendimento (USD)": f"$ {rendimento:,.2f}",
-                "Aporte (USD)": f"$ {aporte_proj:,.2f}",
-                "Saldo Final (USD)": f"$ {saldo:,.2f}",
-                "Crescimento (%)": f"{((saldo - equity) / equity * 100):,.1f}%",
-            })
-
-        df_proj = pd.DataFrame(proj_rows)
-        st.dataframe(df_proj, use_container_width=True, hide_index=True)
-
-        # Gráfico da projeção
-        saldos_proj = [equity]
-        s = equity
-        for _ in range(int(meses_proj)):
-            s = s * (1 + taxa) + aporte_proj
-            saldos_proj.append(s)
-
-        fig_proj = go.Figure()
-        fig_proj.add_trace(go.Scatter(
-            x=list(range(0, int(meses_proj) + 1)),
-            y=saldos_proj,
-            mode="lines+markers",
-            fill="tozeroy",
-            line=dict(color="#3fb950", width=2),
-            marker=dict(size=6),
-            hovertemplate="Mes %{x}<br>Saldo: $ %{y:,.2f}<extra></extra>"
-        ))
-        fig_proj.update_layout(
-            template=tema_plotly,
-            xaxis_title="Meses",
-            yaxis_title="Saldo Projetado (USD)",
-            height=350,
-            margin=dict(l=40, r=40, t=40, b=40),
-        )
-        st.plotly_chart(fig_proj, use_container_width=True)
-        st.markdown(
-            f'<p class="chart-caption">Projecao de {meses_proj} meses com taxa de {taxa_mensal:.1f}%/mes e aporte de $ {aporte_proj:,.2f}/mes | Saldo final projetado: $ {saldos_proj[-1]:,.2f}</p>',
-            unsafe_allow_html=True
-        )
 
 # =========================================================
 # INSIGHTS
@@ -829,48 +758,31 @@ with tab_i:
         - Graficos extras
         """)
     else:
-        st.header("📚 Resumo Estatistico")
+        st.header("📚 Resumo")
         if df.empty:
-            st.info("Adicione trades para ver insights.")
+            st.info("Adicione trades.")
         else:
-            col_a, col_b = st.columns(2)
-
-            with col_a:
-                st.markdown(f"""
-                <div class="insight-card">
-                    <h4>📉 Analise de Perdas</h4>
-                    <p>Media por perda: <b>$ {avg_loss_cash:.2f}</b></p>
-                    <p>Media em pontos: <b>{avg_loss_pts:.3f}</b></p>
-                    <p>Total de perdas: <b>{loss_count}</b></p>
-                    <p>Total perdido: <b>$ {gl:.2f}</b></p>
-                </div>""", unsafe_allow_html=True)
-
-            with col_b:
-                st.markdown(f"""
-                <div class="insight-card">
-                    <h4>📈 Analise de Ganhos</h4>
-                    <p>Media por ganho: <b>$ {avg_win_cash:.2f}</b></p>
-                    <p>Total de ganhos: <b>{win_count}</b></p>
-                    <p>Total ganho: <b>$ {gp:.2f}</b></p>
-                    <p>Profit Factor: <b>{pf:.2f}</b></p>
-                </div>""", unsafe_allow_html=True)
-
-            at = total_profit / total_trades if total_trades > 0 else 0
-            s30 = equity + at * 30
-
             st.markdown(f"""
             <div class="insight-card">
-                <h4>🧮 Simulacao - Proximos 30 trades</h4>
-                <p>Media por trade: <b>$ {at:.2f}</b></p>
-                <p>Equity projetada: <b>$ {s30:,.2f}</b></p>
+                <h4>📉 Perdas</h4>
+                <p>Media: <b>$ {avg_loss_cash:.2f}</b></p>
+                <p>Pontos: <b>{avg_loss_pts:.3f}</b></p>
             </div>""", unsafe_allow_html=True)
-            st.caption("Simulacao historica. Nao garante resultados futuros.")
+
+            at = total_profit / len(df) if len(df) > 0 else 0
+            s30 = equity + at * 30
+            st.markdown(f"""
+            <div class="insight-card">
+                <h4>🧮 Simulacao 30 trades</h4>
+                <p><b>$ {s30:,.2f}</b></p>
+            </div>""", unsafe_allow_html=True)
+            st.caption("Simulacao historica. Nao garante resultados.")
 
             st.divider()
             st.subheader("🏆 Insignias")
             badges = calc_badges(df)
             if not badges:
-                st.info("Registre mais operacoes para desbloquear insignias.")
+                st.info("Registre operacoes para desbloquear.")
             else:
                 cols = st.columns(min(len(badges), 3))
                 for idx, badge in enumerate(badges):
@@ -882,20 +794,21 @@ with tab_i:
                             <p>{badge["desc"]}</p>
                         </div>""", unsafe_allow_html=True)
 
+
 # =========================================================
 # HISTORY
 # =========================================================
 
 with tab_h:
     if df.empty:
-        st.info("Nenhum trade registrado.")
+        st.info("Nenhum trade.")
     else:
         if "confirm_delete_id" in st.session_state:
             did = st.session_state["confirm_delete_id"]
             st.warning(f"Excluir trade {did[:8]}?")
             cc, cx = st.columns(2)
             with cc:
-                if st.button("✅ Confirmar Exclusao", type="primary", use_container_width=True):
+                if st.button("✅ Excluir", type="primary", use_container_width=True):
                     try:
                         delete_trade(usuario_id, did)
                         st.session_state.pop("confirm_delete_id", None)
@@ -924,21 +837,36 @@ with tab_h:
                     ev = e3.number_input("Volume", min_value=0.01,
                                          value=float(r["Volume"]),
                                          step=0.01, format="%.2f")
-                    ep = e4.number_input("Lucro", value=float(r["Lucro"]), format="%.2f")
+                    ep = e4.number_input("Lucro",
+                                         value=float(r["Lucro"]),
+                                         format="%.2f")
                     st.divider()
                     e5, e6, e7, e8 = st.columns(4)
-                    een = e5.number_input("Entrada", value=float(r["Entrada"]), format="%.3f")
-                    eex = e6.number_input("Saida", value=float(r["Saída"]), format="%.3f")
-                    esl = e7.number_input("SL", value=float(r["SL"]), format="%.3f")
-                    etp = e8.number_input("TP", value=float(r["TP"]), format="%.3f")
-                    eob = st.text_area("Obs", value=r["Obs"], max_chars=500)
-                    s1, s2 = st.columns(2)
-                    with s1:
-                        if st.form_submit_button("💾 Salvar", type="primary", use_container_width=True):
+                    een = e5.number_input("Entrada",
+                                          value=float(r["Entrada"]),
+                                          format="%.3f")
+                    eex = e6.number_input("Saida",
+                                          value=float(r["Saída"]),
+                                          format="%.3f")
+                    esl = e7.number_input("SL",
+                                          value=float(r["SL"]),
+                                          format="%.3f")
+                    etp = e8.number_input("TP",
+                                          value=float(r["TP"]),
+                                          format="%.3f")
+                    eob = st.text_area("Obs", value=r["Obs"],
+                                       max_chars=500)
+                    s1b, s2b = st.columns(2)
+                    with s1b:
+                        if st.form_submit_button("💾 Salvar",
+                                                  type="primary",
+                                                  use_container_width=True):
                             try:
-                                td = {"asset": ea.strip().upper(), "type": et,
-                                      "volume": ev, "entry": een, "exit": eex,
-                                      "sl": esl, "tp": etp, "profit": ep,
+                                td = {"asset": ea.strip().upper(),
+                                      "type": et, "volume": ev,
+                                      "entry": een, "exit": eex,
+                                      "sl": esl, "tp": etp,
+                                      "profit": ep,
                                       "observation": eob.strip()}
                                 edit_trade(usuario_id, eid, td)
                                 st.session_state.pop("editing_trade_id", None)
@@ -947,8 +875,9 @@ with tab_h:
                                 st.rerun()
                             except Exception:
                                 st.error("Erro ao salvar.")
-                    with s2:
-                        if st.form_submit_button("❌ Cancelar", use_container_width=True):
+                    with s2b:
+                        if st.form_submit_button("❌ Cancelar",
+                                                  use_container_width=True):
                             st.session_state.pop("editing_trade_id", None)
                             st.rerun()
             st.divider()
@@ -973,39 +902,44 @@ with tab_h:
                     st.session_state["confirm_delete_id"] = sel
                     st.rerun()
 
+
 # =========================================================
 # NEW TRADE
 # =========================================================
 
 with tab_n:
-    cur_trades = len(df)
-    fl = not is_pro and cur_trades >= FREE_TRADE_LIMIT
+    cc = len(df)
+    fl = not is_pro and cc >= FREE_TRADE_LIMIT
 
     if fl:
         st.warning("Limite de 10 trades atingido.")
-        st.info("Assine Pro para trades ilimitados por R$ 29,90/mes.")
+        st.info("Pro: ilimitado por R$ 29,90/mes.")
     else:
         with st.form("add_trade", clear_on_submit=True):
             st.subheader("Registrar Operacao")
-            r1, r2, r3, r4 = st.columns(4)
-            at = r1.text_input("Ativo", value=st.session_state.get("last_asset", "USDJPY"))
-            tt = r2.selectbox("Tipo", ["buy", "sell"])
-            vl = r3.number_input("Volume", min_value=0.01, value=0.01, step=0.01, format="%.2f")
-            pr = r4.number_input("Lucro (USD)", value=0.0, format="%.2f")
+            r1b, r2b, r3b, r4b = st.columns(4)
+            at = r1b.text_input("Ativo",
+                               value=st.session_state.get("last_asset", "USDJPY"))
+            tt = r2b.selectbox("Tipo", ["buy", "sell"])
+            vl = r3b.number_input("Volume", min_value=0.01,
+                                 value=0.01, step=0.01, format="%.2f")
+            pr = r4b.number_input("Lucro (USD)", value=0.0, format="%.2f")
             st.divider()
-            r5, r6, r7, r8 = st.columns(4)
-            en = r5.number_input("Entrada", value=0.0, format="%.3f")
-            ex = r6.number_input("Saida", value=0.0, format="%.3f")
-            sl = r7.number_input("SL", value=0.0, format="%.3f")
-            tp = r8.number_input("TP", value=0.0, format="%.3f")
+            r5b, r6b, r7b, r8b = st.columns(4)
+            en = r5b.number_input("Entrada", value=0.0, format="%.3f")
+            ex = r6b.number_input("Saida", value=0.0, format="%.3f")
+            sl = r7b.number_input("SL", value=0.0, format="%.3f")
+            tp = r8b.number_input("TP", value=0.0, format="%.3f")
             ob = st.text_area("Observacao", max_chars=500)
 
-            if st.form_submit_button("💾 SALVAR TRADE", type="primary", use_container_width=True):
+            if st.form_submit_button("💾 SALVAR TRADE",
+                                     type="primary",
+                                     use_container_width=True):
                 errs = []
                 if not at.strip():
                     errs.append("Informe o ativo.")
                 if vl <= 0:
-                    errs.append("Volume deve ser maior que zero.")
+                    errs.append("Volume > zero.")
                 if errs:
                     for e in errs:
                         st.error(e)
@@ -1025,14 +959,15 @@ with tab_n:
                     except Exception:
                         st.error("Erro ao salvar.")
 
+
 # =========================================================
 # PLANS
 # =========================================================
 
 with tab_p:
     st.title("⭐ Planos")
-    fc, pc = st.columns(2)
 
+    fc, pc = st.columns(2)
     with fc:
         st.markdown("""
         <div class="plan-card">
@@ -1046,10 +981,9 @@ with tab_p:
             <p>❌ Insights</p>
             <p>❌ Insignias</p>
             <p>❌ Graficos extras</p>
-            <p>❌ Projecao juros compostos</p>
         </div>""", unsafe_allow_html=True)
         if not is_pro:
-            st.info("Seu plano atual: Gratuito")
+            st.info("Seu plano: Gratuito")
         else:
             st.caption("Voce ja e Pro.")
 
@@ -1060,12 +994,11 @@ with tab_p:
             <h3>R$ 29,90/mes</h3><br>
             <p>✅ Trades ilimitados</p>
             <p>✅ Resumos estatisticos</p>
-            <p>✅ Insights completos</p>
+            <p>✅ Insights</p>
             <p>✅ Analise de perdas</p>
             <p>✅ Simulacoes</p>
             <p>✅ Insignias</p>
             <p>✅ Graficos extras</p>
-            <p>✅ Projecao juros compostos</p>
         </div>""", unsafe_allow_html=True)
         if owner:
             st.success("🛡️ Pro permanente (dev).")
@@ -1080,176 +1013,105 @@ with tab_p:
     st.divider()
 
     comp = pd.DataFrame({
-        "Recurso": ["Trades", "Metricas", "Graficos", "Historico",
-                    "CSV", "Insights", "Insignias", "Extras", "Simulacoes", "Juros Compostos"],
-        "Gratuito": ["10", "✅", "✅", "✅", "✅", "❌", "❌", "❌", "❌", "❌"],
-        "Pro": ["Ilimitado", "✅", "✅", "✅", "✅", "✅", "✅", "✅", "✅", "✅"],
+        "Recurso": ["Trades", "Metricas", "Graficos",
+                    "Historico", "CSV", "Insights",
+                    "Insignias", "Extras", "Simulacoes"],
+        "Gratuito": ["10", "✅", "✅", "✅", "✅",
+                     "❌", "❌", "❌", "❌"],
+        "Pro": ["Ilimitado", "✅", "✅", "✅", "✅",
+                "✅", "✅", "✅", "✅"],
     })
     st.dataframe(comp, use_container_width=True, hide_index=True)
     st.divider()
     st.caption("Finalidade informativa. Nao garante resultados.")
 
+
 # =========================================================
 # CONFIG
 # =========================================================
 
-with tab_cfg:
-    st.title("⚙️ Configuracoes")
+with tab_c:
+    st.title("⚙️ Configurações")
 
-    # ---------------------------------------------------
-    # TEMA
-    # ---------------------------------------------------
-    st.subheader("🎨 Aparencia")
-    st.caption("Escolha o tema da interface:")
+    c_left, c_right = st.columns(2)
 
-    col_t1, col_t2 = st.columns(2)
-    tema_atual = st.session_state["theme_mode"]
+    with c_left:
+        st.subheader("🎨 Aparência")
+        theme = st.radio("Tema do aplicativo", ["🌙 Noite", "☀️ Dia"],
+                         horizontal=True, key="theme_sel")
+        if theme != st.session_state["theme_mode"]:
+            st.session_state["theme_mode"] = theme
+            st.rerun()
+        st.caption("Aplicado em todo o aplicativo.")
 
-    with col_t1:
-        if st.button(
-            "🌙 Modo Noite",
-            use_container_width=True,
-            type="primary" if tema_atual == "🌙 Noite" else "secondary"
-        ):
-            if st.session_state["theme_mode"] != "🌙 Noite":
-                st.session_state["theme_mode"] = "🌙 Noite"
-                st.rerun()
-
-    with col_t2:
-        if st.button(
-            "☀️ Modo Dia",
-            use_container_width=True,
-            type="primary" if tema_atual == "☀️ Dia" else "secondary"
-        ):
-            if st.session_state["theme_mode"] != "☀️ Dia":
-                st.session_state["theme_mode"] = "☀️ Dia"
-                st.rerun()
-
-    tema_icon = "🌙" if tema_atual == "🌙 Noite" else "☀️"
-    st.info(f"Tema ativo: {tema_icon} {tema_atual}")
-
-    st.divider()
-
-    # ---------------------------------------------------
-    # CAPITAL E APORTE
-    # ---------------------------------------------------
-    st.subheader("💰 Capital e Aportes")
-
-    with st.form("capital_form"):
-        col_c1, col_c2 = st.columns(2)
-        with col_c1:
-            cap = st.number_input(
-                "Capital Inicial (USD)",
-                min_value=0.0,
-                value=float(st.session_state["initial_capital"]),
-                step=1.0, format="%.2f",
-                help="Valor inicial que voce começou a operar"
-            )
-        with col_c2:
-            aporte = st.number_input(
-                "Aporte Mensal (USD)",
-                min_value=0.0,
-                value=float(st.session_state.get("aporte_mensal", 0.0)),
-                step=1.0, format="%.2f",
-                help="Valor que voce adiciona por mes"
-            )
-
-        if st.form_submit_button("💾 Salvar Capital e Aporte", type="primary", use_container_width=True):
-            try:
-                save_capital(usuario_id, cap, aporte)
-                st.session_state["initial_capital"] = cap
-                st.session_state["aporte_mensal"] = aporte
-                st.success("✅ Capital e aporte salvos com sucesso!")
-            except Exception as e:
-                st.error(f"Erro ao salvar: {e}")
-
-    st.divider()
-
-    # ---------------------------------------------------
-    # CONTA
-    # ---------------------------------------------------
-    st.subheader("👤 Informacoes da Conta")
-
-    col_u1, col_u2 = st.columns(2)
-    with col_u1:
-        st.markdown(f"**Nome:** {usuario_nome}")
-        st.markdown(f"**Email:** {usuario_email}")
-        st.markdown(f"**Total de Trades:** {total_trades}")
-    with col_u2:
+        st.divider()
+        st.subheader("👤 Conta")
+        st.markdown(f"""
+        <div class="plan-card">
+            <h4>{usuario_nome}</h4>
+            <p>{usuario_email}</p>
+        </div>""", unsafe_allow_html=True)
         if owner:
             st.success("🛡️ Dev — Pro permanente")
         elif is_pro:
-            st.success("⭐ Plano Pro Ativo")
-            exp = plan_info.get("subscription_expires_at")
-            if exp:
-                st.caption(f"Expira em: {exp.strftime('%d/%m/%Y')}")
+            st.success("⭐ Pro ativo")
         else:
-            st.info("🆓 Plano Gratuito")
-            st.caption(f"Trades usados: {total_trades}/{FREE_TRADE_LIMIT}")
+            st.info("🆓 Plano Gratuito — limite de 10 trades")
 
-    st.divider()
+    with c_right:
+        st.subheader("🔗 Compartilhar")
+        app_url = "https://meu-trade-top.streamlit.app"
+        share = "Estou usando o Trader Analytics Pro!"
+        st.markdown(
+            f"""
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+                <a href="https://wa.me/?text={share}%0A%0A{app_url}" target="_blank"
+                   style="display:inline-flex;align-items:center;gap:8px;background-color:#25D366;color:white;padding:10px 14px;border-radius:10px;text-decoration:none;font-weight:bold;font-size:12px;">
+                    📤 WhatsApp</a>
+                <a href="https://www.instagram.com/direct/new/?text={share}%20{app_url}" target="_blank"
+                   style="display:inline-flex;align-items:center;gap:8px;background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);color:white;padding:10px 14px;border-radius:10px;text-decoration:none;font-weight:bold;font-size:12px;">
+                    📤 Instagram</a>
+            </div>
+            """, unsafe_allow_html=True)
 
-    # ---------------------------------------------------
-    # COMPARTILHAR
-    # ---------------------------------------------------
-    st.subheader("🔗 Compartilhar App")
+        st.divider()
+        st.subheader("📱 Redes")
+        st.markdown(
+            """
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+                <a href="https://wa.me/SEUNUMERO" target="_blank"
+                   style="display:inline-flex;align-items:center;gap:8px;background-color:#25D366;color:white;padding:10px 16px;border-radius:10px;text-decoration:none;font-weight:bold;font-size:13px;">
+                    WhatsApp</a>
+                <a href="https://instagram.com/SEUPERFIL" target="_blank"
+                   style="display:inline-flex;align-items:center;gap:8px;background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);color:white;padding:10px 16px;border-radius:10px;text-decoration:none;font-weight:bold;font-size:13px;">
+                    Instagram</a>
+            </div>
+            """, unsafe_allow_html=True)
 
-    app_url = "https://meu-trade-top.streamlit.app"
-    share_text = "Estou usando o Trader Analytics Pro para gerenciar meus trades!"
-
-    st.markdown(f"""
-    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
-        <a href="https://wa.me/?text={share_text}%0A%0A{app_url}" target="_blank"
-           style="display:inline-flex;align-items:center;gap:8px;background-color:#25D366;
-                  color:white;padding:12px 20px;border-radius:10px;text-decoration:none;
-                  font-weight:bold;font-size:14px;">
-            📤 Compartilhar no WhatsApp</a>
-        <a href="https://instagram.com/SEUPERFIL" target="_blank"
-           style="display:inline-flex;align-items:center;gap:8px;
-                  background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);
-                  color:white;padding:12px 20px;border-radius:10px;text-decoration:none;
-                  font-weight:bold;font-size:14px;">
-            📱 Instagram</a>
-        <a href="https://wa.me/SEUNUMERO" target="_blank"
-           style="display:inline-flex;align-items:center;gap:8px;background-color:#128C7E;
-                  color:white;padding:12px 20px;border-radius:10px;text-decoration:none;
-                  font-weight:bold;font-size:14px;">
-            💬 Suporte WhatsApp</a>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.divider()
-
-    # ---------------------------------------------------
-    # STATUS DA CONEXÃO
-    # ---------------------------------------------------
-    st.subheader("☁️ Status da Conexao")
-
-    if cloud_connected:
-        st.success("✅ Nuvem Conectada")
-        st.caption(f"Projeto: {st.secrets['gcp_service_account']['project_id']}")
-    else:
-        st.error("❌ Modo Offline - Dados nao serao salvos")
-        if st.button("🔄 Tentar reconectar", use_container_width=True):
-            st.cache_resource.clear()
-            st.rerun()
-
-    st.divider()
-
-    # ---------------------------------------------------
-    # SAIR
-    # ---------------------------------------------------
-    st.subheader("🚪 Sessao")
-
-    col_s1, col_s2 = st.columns(2)
-    with col_s1:
-        if st.button("🔄 Sincronizar Dados", use_container_width=True):
-            try:
-                st.session_state["df_trades"] = load_trades(usuario_id)
-                st.success("Dados sincronizados!")
-                st.rerun()
-            except Exception:
-                st.error("Erro ao sincronizar.")
-    with col_s2:
-        if st.button("🚪 Sair da Conta", use_container_width=True, type="primary"):
+        st.divider()
+        if st.button("🚪 Sair da conta", use_container_width=True):
             st.logout()
+```
+
+---
+
+## 💾 Para publicar
+1. Substitua **todo** o conteúdo do `app_web.py` no GitHub
+2. Commit/push
+3. `Manage app` > `Reboot`
+
+---
+
+## ✅ O que mudou (resumo)
+- **Tema em 1 lugar só**: aba ⚙️ Config (sem mistura, inputs e gráficos seguem o tema)
+- **Cabeçalho limpo**: sem lápis, sem GitHub, sem menu duplicado
+- **Sidebar enxuta**: Conexão, progresso, Capital+Aportes, Exportar, Sincronizar
+- **Aportes**: campo na sidebar + métrica "Total Aportes" + entram no Equity e no gráfico de evolução
+- **8 métricas**: Capital, Aportes, Resultado, Equity, Vitórias, Derrotas, Win Rate, PF
+- **Gráfico Evolução do Capital**: Y = $ real, X = tempo, com legenda dos eixos
+- **3 gráficos de barras** (ganho médio, média de lucro, ganhos acumulados) com X = nº do trade, Y = $, cada um com explicação
+- **Tabela de projeção em juros compostos** (Pro) com taxa média por trade e quantidade personalizada
+
+🔒 **Seus 6 trades e seu ID estão preservados** — não mexi na geração do `usuario_id` nem nas coleções existentes. Aportes começam em $ 0,00 (nova coleção `deposits`).
+
+Me confirma com `✅ Ficou perfeito` ou liste o que quer lapidar (cores, ordem das abas, nome dos gráficos). 🚀
