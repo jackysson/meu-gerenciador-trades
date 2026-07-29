@@ -19,6 +19,97 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# =========================================================
+# ESCONDER MARCA D'ÁGUA - MOBILE E DESKTOP
+# =========================================================
+
+st.markdown("""
+    <style>
+    /* ================================================
+       ESCONDER TODOS OS ELEMENTOS DO STREAMLIT
+    ================================================ */
+
+    /* Menu hamburguer */
+    #MainMenu {
+        visibility: hidden !important;
+        display: none !important;
+    }
+
+    /* Toolbar (lápis, github, etc) */
+    [data-testid="stToolbar"] {
+        visibility: hidden !important;
+        display: none !important;
+    }
+
+    /* Footer "Made with Streamlit" */
+    footer {
+        visibility: hidden !important;
+        display: none !important;
+    }
+
+    /* Header completo */
+    header {
+        visibility: hidden !important;
+        display: none !important;
+    }
+
+    /* Botão de deploy */
+    [data-testid="stDeployButton"] {
+        visibility: hidden !important;
+        display: none !important;
+    }
+
+    /* Marca d'água mobile */
+    [data-testid="stBottomBlockContainer"] {
+        display: none !important;
+    }
+
+    /* Barra superior mobile */
+    [data-testid="stAppViewBlockContainer"] > div:first-child {
+        padding-top: 0 !important;
+    }
+
+    /* Remover espaço que o header deixa */
+    .main .block-container {
+        padding-top: 1rem !important;
+        padding-bottom: 1rem !important;
+    }
+
+    /* Esconder watermark do Streamlit */
+    .viewerBadge_container__1QSob {
+        display: none !important;
+    }
+
+    .viewerBadge_link__qRIco {
+        display: none !important;
+    }
+
+    /* Esconder botão GitHub */
+    .viewerBadge_container__r5tak {
+        display: none !important;
+    }
+
+    /* Mobile específico */
+    @media (max-width: 768px) {
+        #MainMenu {
+            display: none !important;
+        }
+        footer {
+            display: none !important;
+        }
+        header {
+            display: none !important;
+        }
+        [data-testid="stToolbar"] {
+            display: none !important;
+        }
+        .main .block-container {
+            padding-top: 0.5rem !important;
+        }
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 FREE_TRADE_LIMIT = 10
 
 TRADE_COLUMNS = [
