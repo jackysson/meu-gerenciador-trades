@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import numpy as np
+import io
 
 from datetime import datetime, timezone
 from google.cloud import firestore
@@ -18,97 +19,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
-
-# =========================================================
-# ESCONDER MARCA D'ÁGUA - MOBILE E DESKTOP
-# =========================================================
-
-st.markdown("""
-    <style>
-    /* ================================================
-       ESCONDER TODOS OS ELEMENTOS DO STREAMLIT
-    ================================================ */
-
-    /* Menu hamburguer */
-    #MainMenu {
-        visibility: hidden !important;
-        display: none !important;
-    }
-
-    /* Toolbar (lápis, github, etc) */
-    [data-testid="stToolbar"] {
-        visibility: hidden !important;
-        display: none !important;
-    }
-
-    /* Footer "Made with Streamlit" */
-    footer {
-        visibility: hidden !important;
-        display: none !important;
-    }
-
-    /* Header completo */
-    header {
-        visibility: hidden !important;
-        display: none !important;
-    }
-
-    /* Botão de deploy */
-    [data-testid="stDeployButton"] {
-        visibility: hidden !important;
-        display: none !important;
-    }
-
-    /* Marca d'água mobile */
-    [data-testid="stBottomBlockContainer"] {
-        display: none !important;
-    }
-
-    /* Barra superior mobile */
-    [data-testid="stAppViewBlockContainer"] > div:first-child {
-        padding-top: 0 !important;
-    }
-
-    /* Remover espaço que o header deixa */
-    .main .block-container {
-        padding-top: 1rem !important;
-        padding-bottom: 1rem !important;
-    }
-
-    /* Esconder watermark do Streamlit */
-    .viewerBadge_container__1QSob {
-        display: none !important;
-    }
-
-    .viewerBadge_link__qRIco {
-        display: none !important;
-    }
-
-    /* Esconder botão GitHub */
-    .viewerBadge_container__r5tak {
-        display: none !important;
-    }
-
-    /* Mobile específico */
-    @media (max-width: 768px) {
-        #MainMenu {
-            display: none !important;
-        }
-        footer {
-            display: none !important;
-        }
-        header {
-            display: none !important;
-        }
-        [data-testid="stToolbar"] {
-            display: none !important;
-        }
-        .main .block-container {
-            padding-top: 0.5rem !important;
-        }
-    }
-    </style>
-""", unsafe_allow_html=True)
 
 FREE_TRADE_LIMIT = 10
 
@@ -175,7 +85,7 @@ PLOTLY_TEMPLATE = "plotly_dark" if st.session_state["theme_mode"] == "🌙 Noite
 if st.session_state["theme_mode"] == "☀️ Dia":
     st.markdown("""
         <style>
-        #MainMenu, [data-testid="stToolbar"], [data-testid="stFooter"], footer {visibility: hidden !important; display: none !important;}
+        #MainMenu, header, footer, [data-testid="stFooter"], [data-testid="stToolbar"], [data-testid="stStatusWidget"], [data-testid="stBottom"] {visibility: hidden !important; display: none !important;} a[href*="github.com"], a[href*="streamlit.io"] {display: none !important;}
         .stApp { background-color: #ffffff !important; }
         section[data-testid="stSidebar"] { background-color: #f0f2f6 !important; }
         h1, h2, h3, h4, h5, h6, p, span, label, li, td, th { color: #1a1a2e !important; }
@@ -195,7 +105,7 @@ if st.session_state["theme_mode"] == "☀️ Dia":
 else:
     st.markdown("""
         <style>
-        #MainMenu, [data-testid="stToolbar"], [data-testid="stFooter"], footer {visibility: hidden !important; display: none !important;}
+        #MainMenu, header, footer, [data-testid="stFooter"], [data-testid="stToolbar"], [data-testid="stStatusWidget"], [data-testid="stBottom"] {visibility: hidden !important; display: none !important;} a[href*="github.com"], a[href*="streamlit.io"] {display: none !important;}
         .stApp { background-color: #0d1117 !important; color: #e6edf3 !important; }
         section[data-testid="stSidebar"] { background-color: #161b22 !important; }
         h1, h2, h3, h4, h5, h6, p, span, label, li, td, th, div { color: #c9d1d9 !important; }
@@ -425,53 +335,187 @@ def delete_trade(uid, tid):
 
 
 # =========================================================
-# IMPORTACAO CSV
+# IMPORTADOR INTELIGENTE (4 camadas + HTML MT4/MT5)
 # =========================================================
 
-def parse_imported_csv(file):
-    tmp = pd.read_csv(file)
-    tmp.columns = [str(c).strip() for c in tmp.columns]
-    lower_map = {str(c).strip().lower(): str(c).strip() for c in tmp.columns}
-    alias = {
-        "asset": "Ativo", "ativo": "Ativo",
-        "type": "Tipo", "tipo": "Tipo",
-        "volume": "Volume",
-        "entry": "Entrada", "entrada": "Entrada",
-        "exit": "Saída", "saida": "Saída",
-        "sl": "SL", "tp": "TP",
-        "profit": "Lucro", "lucro": "Lucro",
-        "observation": "Obs", "obs": "Obs",
-        "data": "Data",
-    }
-    for low, target in alias.items():
-        if low in lower_map and lower_map[low] != target:
-            tmp = tmp.rename(columns={lower_map[low]: target})
-    if "Ativo" not in tmp.columns:
-        raise ValueError("CSV sem coluna 'Ativo'. Use o mesmo formato exportado pelo app.")
+COLUMN_ALIASES = {
+    "Ativo": ["ativo", "asset", "symbol", "símbolo", "simbolo", "par", "pair",
+              "instrument", "instrumento", "ticker", "mercado", "market", "currency"],
+    "Tipo": ["tipo", "type", "side", "lado", "direção", "direcao", "direction",
+             "operation", "operacao", "ação", "acao", "action", "order type", "sentido"],
+    "Volume": ["volume", "lot", "lote", "lots", "quantity", "quantidade", "qty",
+               "size", "tamanho", "amount", "contratos"],
+    "Entrada": ["entrada", "entry", "open", "abertura", "open price",
+                "preço de entrada", "preco de entrada", "entry price", "price open"],
+    "Saída": ["saída", "saida", "exit", "close", "fechamento", "close price",
+              "preço de saída", "preco de saida", "exit price", "price close"],
+    "SL": ["sl", "stop loss", "stop", "stoploss", "stop price", "stop loss price"],
+    "TP": ["tp", "take profit", "takeprofit", "take profit price", "target", "alvo"],
+    "Lucro": ["lucro", "profit", "pnl", "p&l", "resultado", "result", "gain",
+              "ganho", "net profit", "lucro líquido", "lucro liquido", "profit/loss",
+              "realized p&l", "u$s", "usd", "valor", "profit loss"],
+    "Data": ["data", "date", "time", "data/hora", "data e hora", "datetime",
+             "open time", "close time", "timestamp", "open date", "close date",
+             "data de abertura", "data de fechamento", "hora de abertura",
+             "hora de fechamento"],
+    "Obs": ["obs", "observation", "observação", "observacao", "comment",
+            "comentário", "comentario", "note", "notes", "nota", "description",
+            "descrição", "descricao"],
+}
 
-    def num(r, col):
-        v = pd.to_numeric([r.get(col, 0)], errors="coerce")[0]
-        return float(v) if pd.notna(v) else 0.0
+SELL_WORDS = ["sell", "venda", "vender", "short", "put", "down", "s", "0", "-1", "vermelho", "red"]
 
-    rows = []
-    for _, r in tmp.iterrows():
-        ativo = str(r.get("Ativo", "")).strip().upper()
-        if not ativo or ativo == "NAN":
+SKIP_ASSETS = {"TOTAL", "BALANCE", "BALANÇO", "BALANCO", "SALDO", "DEPOSIT",
+               "DEPÓSITO", "DEPOSITO", "WITHDRAWAL", "SAQUE", "CREDIT",
+               "CRÉDITO", "CREDITO", "COMMISSION", "COMISSÃO", "COMISSAO",
+               "SWAP", "EQUITY", "MARGEM", "MARGIN", "FREE MARGIN"}
+
+
+def auto_map_columns(columns):
+    mapping = {}
+    cols_lower = {str(c).strip().lower(): str(c).strip() for c in columns}
+    for target, aliases in COLUMN_ALIASES.items():
+        for alias in [target.lower()] + aliases:
+            if alias in cols_lower and target not in mapping:
+                mapping[target] = cols_lower[alias]
+                break
+    return mapping
+
+
+def detect_separator(text):
+    sample = "\n".join(text.splitlines()[:15])
+    counts = {sep: sample.count(sep) for sep in [",", ";", "\t", "|"]}
+    best = max(counts, key=counts.get)
+    return best if counts[best] > 0 else ","
+
+
+def br_to_float(v):
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return 0.0
+    if isinstance(v, (int, float)):
+        return float(v)
+    s = str(v).strip().replace(" ", "")
+    if not s or s.lower() == "nan":
+        return 0.0
+    for ch in ["R$", "$", "USD", "usd", "%"]:
+        s = s.replace(ch, "")
+    s = s.strip()
+    has_dot, has_comma = "." in s, "," in s
+    if has_dot and has_comma:
+        if s.rfind(",") > s.rfind("."):
+            s = s.replace(".", "").replace(",", ".")
+        else:
+            s = s.replace(",", "")
+    elif has_comma:
+        parts = s.split(",")
+        if len(parts) > 2 or (len(parts) == 2 and len(parts[-1]) == 3 and len(parts[0]) <= 3):
+            s = s.replace(",", "")
+        else:
+            s = s.replace(",", ".")
+    try:
+        return float(s)
+    except ValueError:
+        return 0.0
+
+
+def parse_date_flexible(v):
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return ""
+    if isinstance(v, datetime):
+        return v.strftime("%Y-%m-%d %H:%M:%S")
+    s = str(v).strip()
+    if not s or s.lower() == "nan":
+        return ""
+    fmts = [
+        "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d",
+        "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%d/%m/%Y",
+        "%m/%d/%Y %H:%M:%S", "%m/%d/%Y %H:%M", "%m/%d/%Y",
+        "%d.%m.%Y %H:%M:%S", "%d.%m.%Y %H:%M", "%d.%m.%Y",
+        "%Y/%m/%d %H:%M:%S", "%Y/%m/%d %H:%M", "%Y/%m/%d",
+        "%d-%m-%Y %H:%M:%S", "%d-%m-%Y",
+        "%Y.%m.%d %H:%M:%S", "%Y.%m.%d %H:%M", "%Y.%m.%d",
+    ]
+    for f in fmts:
+        try:
+            return datetime.strptime(s, f).strftime("%Y-%m-%d %H:%M:%S")
+        except ValueError:
             continue
-        tipo = str(r.get("Tipo", "buy")).strip().lower()
-        tipo = "sell" if tipo.startswith("s") else "buy"
-        obs = r.get("Obs", "")
+    try:
+        return pd.to_datetime(s, dayfirst=True).strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return ""
+
+
+def read_html_smart(text):
+    tables = pd.read_html(io.StringIO(text))
+    if not tables:
+        raise ValueError("Nenhuma tabela encontrada no HTML.")
+    best, best_score = None, -1
+    for t in tables:
+        if len(t) == 0:
+            continue
+        cand = t
+        generic = all(str(c).startswith("Unnamed") or str(c).isdigit() for c in cand.columns)
+        if generic and len(cand) > 1:
+            cand = cand.copy()
+            cand.columns = [str(v).strip() for v in cand.iloc[0]]
+            cand = cand.iloc[1:].reset_index(drop=True)
+        score = len(auto_map_columns(cand.columns)) * 1000 + len(cand)
+        if score > best_score:
+            best_score = score
+            best = cand
+    if best is None:
+        raise ValueError("Nenhuma tabela válida no HTML.")
+    return best
+
+
+def read_file_smart(file):
+    fname = (getattr(file, "name", "") or "").lower()
+    raw = file.getvalue()
+    text = raw.decode("utf-8-sig", errors="replace")
+    if fname.endswith(".html") or fname.endswith(".htm") or "<table" in text[:5000].lower():
+        return read_html_smart(text)
+    sep = detect_separator(text)
+    return pd.read_csv(io.StringIO(text), sep=sep, engine="python")
+
+
+def convert_rows(tmp, mapping):
+    rows = []
+    col_ativo = mapping.get("Ativo")
+    if not col_ativo or col_ativo not in tmp.columns:
+        return rows
+
+    def gv(target, r):
+        col = mapping.get(target)
+        if col and col in tmp.columns:
+            return br_to_float(r.get(col))
+        return 0.0
+
+    for _, r in tmp.iterrows():
+        ativo = str(r.get(col_ativo, "")).strip().upper().rstrip(":")
+        if not ativo or ativo == "NAN" or ativo in SKIP_ASSETS:
+            continue
+        tipo = "buy"
+        tcol = mapping.get("Tipo")
+        if tcol and tcol in tmp.columns:
+            tr = str(r.get(tcol, "")).strip().lower()
+            if tr in SELL_WORDS or tr.startswith("s") or tr.startswith("v"):
+                tipo = "sell"
+        obs = ""
+        ocol = mapping.get("Obs")
+        if ocol and ocol in tmp.columns and pd.notna(r.get(ocol)):
+            obs = str(r.get(ocol)).strip()
+        data = ""
+        dcol = mapping.get("Data")
+        if dcol and dcol in tmp.columns:
+            data = parse_date_flexible(r.get(dcol))
         rows.append({
-            "asset": ativo,
-            "type": tipo,
-            "volume": num(r, "Volume") or 0.01,
-            "entry": num(r, "Entrada"),
-            "exit": num(r, "Saída"),
-            "sl": num(r, "SL"),
-            "tp": num(r, "TP"),
-            "profit": num(r, "Lucro"),
-            "observation": str(obs).strip() if pd.notna(obs) else "",
-            "data": str(r.get("Data", "")).strip() if "Data" in tmp.columns and pd.notna(r.get("Data")) else "",
+            "asset": ativo, "type": tipo,
+            "volume": gv("Volume", r) or 0.01,
+            "entry": gv("Entrada", r), "exit": gv("Saída", r),
+            "sl": gv("SL", r), "tp": gv("TP", r),
+            "profit": gv("Lucro", r),
+            "observation": obs, "data": data,
         })
     return rows
 
@@ -624,7 +668,8 @@ if st.session_state.get("active_user_id") != usuario_id:
     st.session_state["active_user_id"] = usuario_id
     for k in ["df_trades", "initial_capital", "last_asset",
               "editing_trade_id", "confirm_delete_id",
-              "deposit_total", "deposit_events"]:
+              "deposit_total", "deposit_events",
+              "csv_file_name", "csv_df", "csv_auto_map", "last_imported_name"]:
         st.session_state.pop(k, None)
 
 if "df_trades" not in st.session_state:
@@ -735,30 +780,59 @@ with st.sidebar:
                        file_name="meus_trades.csv",
                        mime="text/csv", use_container_width=True)
 
-    up = st.file_uploader("📤 Importar CSV", type=["csv"], key="import_csv")
+    up = st.file_uploader("📤 Importar (MT4/MT5 HTML, Binance, cTrader, CSV...)",
+                          type=["csv", "txt", "html", "htm"], key="import_csv")
     if up is not None:
-        if up.name == st.session_state.get("last_imported_name"):
-            st.caption(f"✅ '{up.name}' já foi importado.")
+        fname = up.name
+        if fname == st.session_state.get("last_imported_name"):
+            st.caption(f"✅ '{fname}' já foi importado. Envie outro arquivo para importar mais.")
         else:
-            try:
-                parsed = parse_imported_csv(up)
-            except Exception as e:
-                st.error(f"❌ CSV inválido: {e}")
-                parsed = []
-            if parsed:
-                st.caption(f"🔎 {len(parsed)} trade(s) encontrado(s) no arquivo.")
-                if st.button("✅ Confirmar importação", type="primary", use_container_width=True):
-                    try:
-                        n, skipped = import_trades(usuario_id, usuario_email, parsed)
-                        st.session_state["last_imported_name"] = up.name
-                        st.session_state["df_trades"] = load_trades(usuario_id)
-                        if n:
-                            st.success(f"✅ {n} trade(s) importado(s)!")
-                        if skipped:
-                            st.warning(f"⚠️ {skipped} ignorado(s) pelo limite do plano gratuito.")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Erro ao importar: {e}")
+            if st.session_state.get("csv_file_name") != fname:
+                for t in ["Ativo", "Tipo", "Volume", "Entrada", "Saída", "SL", "TP", "Lucro", "Data", "Obs"]:
+                    st.session_state.pop(f"map_{t}", None)
+                try:
+                    tmp = read_file_smart(up)
+                    st.session_state["csv_file_name"] = fname
+                    st.session_state["csv_df"] = tmp
+                    st.session_state["csv_auto_map"] = auto_map_columns(tmp.columns)
+                except Exception as e:
+                    st.error(f"❌ Não consegui ler o arquivo: {e}")
+                    st.session_state["csv_file_name"] = None
+            tmp = st.session_state.get("csv_df")
+            auto_map = st.session_state.get("csv_auto_map", {})
+            if tmp is not None and len(tmp) > 0:
+                cols = ["—"] + [str(c) for c in tmp.columns]
+                with st.expander("🗂️ Colunas detectadas (ajuste se precisar)",
+                                 expanded=("Ativo" not in auto_map)):
+                    for target in ["Ativo", "Tipo", "Volume", "Entrada", "Saída",
+                                   "SL", "TP", "Lucro", "Data", "Obs"]:
+                        default_col = auto_map.get(target)
+                        idx = cols.index(default_col) if default_col in cols else 0
+                        st.selectbox(target, cols, index=idx, key=f"map_{target}")
+                fmap = {t: st.session_state[f"map_{t}"]
+                        for t in ["Ativo", "Tipo", "Volume", "Entrada", "Saída",
+                                  "SL", "TP", "Lucro", "Data", "Obs"]
+                        if st.session_state.get(f"map_{t}", "—") != "—"}
+                if "Ativo" in fmap:
+                    preview_rows = convert_rows(tmp, fmap)
+                    st.caption(f"🔎 {len(preview_rows)} trade(s) pronto(s) para importar.")
+                    if st.button("✅ Confirmar importação", type="primary", use_container_width=True):
+                        try:
+                            n, skipped = import_trades(usuario_id, usuario_email, preview_rows)
+                            st.session_state["last_imported_name"] = fname
+                            st.session_state["df_trades"] = load_trades(usuario_id)
+                            st.session_state["csv_file_name"] = None
+                            if n:
+                                st.success(f"✅ {n} trade(s) importado(s)!")
+                            if skipped:
+                                st.warning(f"⚠️ {skipped} ignorado(s) pelo limite do plano gratuito.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro ao importar: {e}")
+                else:
+                    st.warning("Selecione ao menos a coluna **Ativo** no mapeamento acima.")
+            elif tmp is not None:
+                st.warning("Arquivo sem linhas válidas.")
 
     if st.button("🔄 Sincronizar", use_container_width=True):
         try:
@@ -1352,16 +1426,4 @@ with tab_c:
         st.subheader("📱 Redes")
         st.markdown(
             """
-            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
-                <a href="https://wa.me/SEUNUMERO" target="_blank"
-                   style="display:inline-flex;align-items:center;gap:8px;background-color:#25D366;color:white;padding:10px 16px;border-radius:10px;text-decoration:none;font-weight:bold;font-size:13px;">
-                    WhatsApp</a>
-                <a href="https://instagram.com/SEUPERFIL" target="_blank"
-                   style="display:inline-flex;align-items:center;gap:8px;background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);color:white;padding:10px 16px;border-radius:10px;text-decoration:none;font-weight:bold;font-size:13px;">
-                    Instagram</a>
-            </div>
-            """, unsafe_allow_html=True)
-
-        st.divider()
-        if st.button("🚪 Sair da conta", use_container_width=True):
-            st.logout()
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px
