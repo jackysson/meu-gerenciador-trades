@@ -13,67 +13,20 @@ from google.oauth2 import service_account
 # CONFIG
 # =========================================================
 
-with tab_c:
-    st.title("⚙️ Configurações")
+st.set_page_config(
+    page_title="Trader Analytics Pro",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
-    c_left, c_right = st.columns(2)
+FREE_TRADE_LIMIT = 10
 
-    with c_left:
-        st.subheader("🎨 Aparência")
-        theme = st.radio("Tema do aplicativo", ["🌙 Noite", "☀️ Dia"],
-                         horizontal=True, key="theme_sel")
-        if theme != st.session_state["theme_mode"]:
-            st.session_state["theme_mode"] = theme
-            st.rerun()
-        st.caption("Aplicado em todo o aplicativo.")
+TRADE_COLUMNS = [
+    "id", "Data", "Ativo", "Tipo", "Volume",
+    "Entrada", "Saída", "SL", "TP", "Lucro", "Obs",
+]
 
-        st.divider()
-        st.subheader("👤 Conta")
-        st.markdown(f"""
-        <div class="plan-card">
-            <h4>{usuario_nome}</h4>
-            <p>{usuario_email}</p>
-        </div>""", unsafe_allow_html=True)
-        if owner:
-            st.success("🛡️ Dev — Pro permanente")
-        elif is_pro:
-            st.success("⭐ Pro ativo")
-        else:
-            st.info("🆓 Plano Gratuito — limite de 10 trades")
-
-    with c_right:
-        st.subheader("🔗 Compartilhar")
-        app_url = "https://meu-trade-top.streamlit.app"
-        share = "Estou usando o Trader Analytics Pro!"
-        st.markdown(
-            f"""
-            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
-                <a href="https://wa.me/?text={share}%0A%0A{app_url}" target="_blank"
-                   style="display:inline-flex;align-items:center;gap:8px;background-color:#25D366;color:white;padding:10px 14px;border-radius:10px;text-decoration:none;font-weight:bold;font-size:12px;">
-                    📤 WhatsApp</a>
-                <a href="https://www.instagram.com/direct/new/?text={share}%20{app_url}" target="_blank"
-                   style="display:inline-flex;align-items:center;gap:8px;background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);color:white;padding:10px 14px;border-radius:10px;text-decoration:none;font-weight:bold;font-size:12px;">
-                    📤 Instagram</a>
-            </div>
-            """, unsafe_allow_html=True)
-
-        st.divider()
-        st.subheader("📱 Redes")
-        st.markdown(
-            """
-            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
-                <a href="https://wa.me/SEUNUMERO" target="_blank"
-                   style="display:inline-flex;align-items:center;gap:8px;background-color:#25D366;color:white;padding:10px 16px;border-radius:10px;text-decoration:none;font-weight:bold;font-size:13px;">
-                    WhatsApp</a>
-                <a href="https://instagram.com/SEUPERFIL" target="_blank"
-                   style="display:inline-flex;align-items:center;gap:8px;background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);color:white;padding:10px 16px;border-radius:10px;text-decoration:none;font-weight:bold;font-size:13px;">
-                    Instagram</a>
-            </div>
-            """, unsafe_allow_html=True)
-
-        st.divider()
-        if st.button("🚪 Sair da conta", use_container_width=True):
-            st.logout()
 
 # =========================================================
 # LOGIN CHECK & PAGE
@@ -1419,6 +1372,7 @@ with tab_p:
     st.dataframe(comp, use_container_width=True, hide_index=True)
     st.divider()
     st.caption("Finalidade informativa. Nao garante resultados.")
+
 
 # =========================================================
 # CONFIG
