@@ -447,7 +447,7 @@ def parse_date_flexible(v):
 
 
 def read_html_smart(text):
-    tables = pd.read_html(io.StringIO(text))
+    tables = pd.read_html(io.StringIO(text), flavor="lxml")
     if not tables:
         raise ValueError("Nenhuma tabela encontrada no HTML.")
     best, best_score = None, -1
