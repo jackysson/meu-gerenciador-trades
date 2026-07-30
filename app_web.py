@@ -1420,7 +1420,6 @@ with tab_p:
     st.divider()
     st.caption("Finalidade informativa. Nao garante resultados.")
 
-
 # =========================================================
 # CONFIG
 # =========================================================
@@ -1473,4 +1472,16 @@ with tab_c:
         st.subheader("📱 Redes")
         st.markdown(
             """
-            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+                <a href="https://wa.me/SEUNUMERO" target="_blank"
+                   style="display:inline-flex;align-items:center;gap:8px;background-color:#25D366;color:white;padding:10px 16px;border-radius:10px;text-decoration:none;font-weight:bold;font-size:13px;">
+                    WhatsApp</a>
+                <a href="https://instagram.com/SEUPERFIL" target="_blank"
+                   style="display:inline-flex;align-items:center;gap:8px;background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);color:white;padding:10px 16px;border-radius:10px;text-decoration:none;font-weight:bold;font-size:13px;">
+                    Instagram</a>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.divider()
+        if st.button("🚪 Sair da conta", use_container_width=True):
+            st.logout()
