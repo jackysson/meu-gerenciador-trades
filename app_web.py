@@ -883,9 +883,9 @@ with st.sidebar:
                 except Exception as e:
                     st.error(f"❌ Não consegui ler o arquivo: {e}")
                     st.session_state["csv_file_name"] = None
-            tmp = st.session_state.get("csv_df")
+                        tmp = st.session_state.get("csv_df")
             auto_map = st.session_state.get("csv_auto_map", {})
-                        if tmp is not None and len(tmp) > 0:
+            if tmp is not None and len(tmp) > 0:
                 if "Ativo" not in auto_map:
                     st.error("❌ Não reconheci a coluna de Ativo automaticamente.")
                     st.caption("🔎 Colunas lidas: " + " | ".join(str(c) for c in tmp.columns[:14]))
@@ -905,7 +905,7 @@ with st.sidebar:
                             st.rerun()
                         except Exception as e:
                             st.error(f"Erro ao importar: {e}")
-                    elif tmp is not None:
+            elif tmp is not None:
                 st.warning("Arquivo sem linhas válidas.")
 
     if st.button("🔄 Sincronizar", use_container_width=True):
