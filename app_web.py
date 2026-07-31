@@ -369,7 +369,7 @@ SELL_WORDS = ["sell", "venda", "vender", "short", "put", "down", "s", "0", "-1",
 SKIP_ASSETS = {"TOTAL", "BALANCE", "BALANÇO", "BALANCO", "SALDO", "DEPOSIT",
                "DEPÓSITO", "DEPOSITO", "WITHDRAWAL", "SAQUE", "CREDIT",
                "CRÉDITO", "CREDITO", "COMMISSION", "COMISSÃO", "COMISSAO",
-               "SWAP", "EQUITY", "MARGEM", "MARGIN", "FREE MARGIN"}
+               "SWAP", "EQUITY", "MARGEM", "MARGIN", "FREE MARGIN", "ATIVO", "SYMBOL", "TICKET", "LUCRO", "BRUTO", "REBAIXAMENTO"}
 
 
 def dedupe_columns(df):
@@ -575,6 +575,13 @@ def convert_rows(tmp, mapping):
 
     for _, r in tmp.iterrows():
         ativo = str(r.get(col_ativo, "")).strip().upper().rstrip(":")
+        if "(" in ativo or "%" in ativo or " " in ativo:
+            continue
+        try:
+            float(ativo.replace(",", "."))
+            continue
+        except ValueError:
+            pass
         if not ativo or ativo == "NAN" or ativo in SKIP_ASSETS:
             continue
         tipo = "buy"
