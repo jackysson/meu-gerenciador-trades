@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import numpy as np
 import io
+import re
 
 from datetime import datetime, timezone
 from google.cloud import firestore
@@ -335,12 +336,8 @@ def delete_trade(uid, tid):
 
 
 # =========================================================
-# IMPORTADOR INTELIGENTE (4 camadas + HTML MT4/MT5)
+# IMPORTADOR INTELIGENTE (CSV + HTML MT4/MT5)
 # =========================================================
-
-import re
-
-import re
 
 COLUMN_ALIASES = {
     "Ativo": ["ativo", "asset", "symbol", "símbolo", "simbolo", "par", "pair",
@@ -873,8 +870,6 @@ with st.sidebar:
             st.caption(f"✅ '{fname}' já foi importado. Envie outro arquivo para importar mais.")
         else:
             if st.session_state.get("csv_file_name") != fname:
-                for t in ["Ativo", "Tipo", "Volume", "Entrada", "Saída", "SL", "TP", "Lucro", "Data", "Obs"]:
-                    st.session_state.pop(f"map_{t}", None)
                 try:
                     tmp = read_file_smart(up)
                     st.session_state["csv_file_name"] = fname
@@ -883,7 +878,7 @@ with st.sidebar:
                 except Exception as e:
                     st.error(f"❌ Não consegui ler o arquivo: {e}")
                     st.session_state["csv_file_name"] = None
-                        tmp = st.session_state.get("csv_df")
+            tmp = st.session_state.get("csv_df")
             auto_map = st.session_state.get("csv_auto_map", {})
             if tmp is not None and len(tmp) > 0:
                 if "Ativo" not in auto_map:
