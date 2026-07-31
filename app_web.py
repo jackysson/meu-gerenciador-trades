@@ -1227,23 +1227,44 @@ with tab_h:
     if df.empty:
         st.info("Nenhum trade.")
     else:
-        if "confirm_delete_id" in st.session_state:
-            did = st.session_state["confirm_delete_id"]
-            st.warning(f"Excluir trade {did[:8]}?")
+        if "confirm_bulk_ids" in st.session_state:
+            ids = st.session_state["confirm_bulk_ids"]
+            st.warning(f"⚠️ Excluir {len(ids)} trade(s) selecionado(s)? Esta ação não pode ser desfeita.")
             cc, cx = st.columns(2)
             with cc:
-                if st.button("✅ Excluir", type="primary", use_container_width=True):
+                if st.button("✅ Sim, excluir", type="primary", use_container_width=True):
                     try:
-                        delete_trade(usuario_id, did)
-                        st.session_state.pop("confirm_delete_id", None)
+                        for tid in ids:
+                            delete_trade(usuario_id, tid)
+                        st.session_state.pop("confirm_bulk_ids", None)
                         st.session_state["df_trades"] = load_trades(usuario_id)
-                        st.success("Excluido!")
+                        st.success("Trades excluidos!")
                         st.rerun()
                     except Exception:
                         st.error("Erro ao excluir.")
             with cx:
                 if st.button("❌ Cancelar", use_container_width=True):
-                    st.session_state.pop("confirm_delete_id", None)
+                    st.session_state.pop("confirm_bulk_ids", None)
+                    st.rerun()
+            st.divider()
+
+        if st.session_state.get("confirm_delete_all"):
+            st.warning(f"⚠️ Excluir TODOS os {len(df)} trades? Esta ação não pode ser desfeita.")
+            cc, cx = st.columns(2)
+            with cc:
+                if st.button("✅ Sim, excluir tudo", type="primary", use_container_width=True):
+                    try:
+                        for tid in df["id"].tolist():
+                            delete_trade(usuario_id, tid)
+                        st.session_state["confirm_delete_all"] = False
+                        st.session_state["df_trades"] = load_trades(usuario_id)
+                        st.success("Todos os trades foram excluidos!")
+                        st.rerun()
+                    except Exception:
+                        st.error("Erro ao excluir.")
+            with cx:
+                if st.button("❌ Cancelar", use_container_width=True):
+                    st.session_state["confirm_delete_all"] = False
                     st.rerun()
             st.divider()
 
@@ -1312,25 +1333,39 @@ with tab_h:
         st.divider()
 
         st.subheader("Acoes por trade")
-        tids = df["id"].tolist()
-        sel = st.selectbox("Selecione o ID", options=tids,
-                           format_func=lambda x: f"{x[:8]}..." if len(x) > 8 else x)
-        if sel:
-            ce, cd = st.columns(2)
-            with ce:
-                if st.button("✏️ Editar", use_container_width=True):
-                    st.session_state["editing_trade_id"] = sel
-                    st.rerun()
-            with cd:
-                if st.button("🗑️ Excluir", use_container_width=True):
-                    st.session_state["confirm_delete_id"] = sel
-                    st.rerun()
+        labels = []
+        label_to_id = {}
+        for _, r in df.sort_index(ascending=False).iterrows():
+            lbl = f"{r['Data']}  |  {r['Ativo']}  |  {r['Tipo']}  |  $ {float(r['Lucro']):,.2f}  |  #{str(r['id'])[:4]}"
+            labels.append(lbl)
+            label_to_id[lbl] = r["id"]
+        sel_labels = st.multiselect(
+            "Selecione um ou mais trades",
+            options=labels)
+        sel_ids = [label_to_id[l] for l in sel_labels]
+        if sel_labels:
+            st.caption(f"{len(sel_ids)} trade(s) selecionado(s).")
+
+        b1, b2, b3 = st.columns(3)
+        with b1:
+            if st.button("✏️ Editar", use_container_width=True,
+                         disabled=len(sel_ids) != 1):
+                st.session_state["editing_trade_id"] = sel_ids[0]
+                st.rerun()
+        with b2:
+            if st.button("🗑️ Excluir selecionados", use_container_width=True,
+                         disabled=len(sel_ids) == 0):
+                st.session_state["confirm_bulk_ids"] = sel_ids
+                st.rerun()
+        with b3:
+            if st.button("☠️ Excluir TODOS", use_container_width=True):
+                st.session_state["confirm_delete_all"] = True
+                st.rerun()
 
 
 # =========================================================
 # NEW TRADE
 # =========================================================
-
 with tab_n:
     cc = len(df)
     fl = not is_pro and cc >= FREE_TRADE_LIMIT
