@@ -886,20 +886,11 @@ with st.sidebar:
             tmp = st.session_state.get("csv_df")
             auto_map = st.session_state.get("csv_auto_map", {})
             if tmp is not None and len(tmp) > 0:
-                cols = ["—"] + [str(c) for c in tmp.columns]
-                with st.expander("🗂️ Colunas detectadas (ajuste se precisar)",
-                                 expanded=("Ativo" not in auto_map)):
-                    for target in ["Ativo", "Tipo", "Volume", "Entrada", "Saída",
-                                   "SL", "TP", "Lucro", "Data", "Obs"]:
-                        default_col = auto_map.get(target)
-                        idx = cols.index(default_col) if default_col in cols else 0
-                        st.selectbox(target, cols, index=idx, key=f"map_{target}")
-                fmap = {t: st.session_state[f"map_{t}"]
-                        for t in ["Ativo", "Tipo", "Volume", "Entrada", "Saída",
-                                  "SL", "TP", "Lucro", "Data", "Obs"]
-                        if st.session_state.get(f"map_{t}", "—") != "—"}
-                if "Ativo" in fmap:
-                    preview_rows = convert_rows(tmp, fmap)
+                                if "Ativo" not in auto_map:
+                    st.error("❌ Não reconheci a coluna de Ativo automaticamente.")
+                    st.caption("🔎 Colunas lidas: " + " | ".join(str(c) for c in tmp.columns[:14]))
+                else:
+                    preview_rows = convert_rows(tmp, auto_map)
                     st.caption(f"🔎 {len(preview_rows)} trade(s) pronto(s) para importar.")
                     if st.button("✅ Confirmar importação", type="primary", use_container_width=True):
                         try:
@@ -914,8 +905,6 @@ with st.sidebar:
                             st.rerun()
                         except Exception as e:
                             st.error(f"Erro ao importar: {e}")
-                else:
-                    st.warning("Selecione ao menos a coluna **Ativo** no mapeamento acima.")
             elif tmp is not None:
                 st.warning("Arquivo sem linhas válidas.")
 
