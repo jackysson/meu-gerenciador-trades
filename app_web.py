@@ -340,6 +340,8 @@ def delete_trade(uid, tid):
 
 import re
 
+import re
+
 COLUMN_ALIASES = {
     "Ativo": ["ativo", "asset", "symbol", "símbolo", "simbolo", "par", "pair",
               "instrument", "instrumento", "ticker", "mercado", "market", "currency", "item"],
@@ -348,9 +350,9 @@ COLUMN_ALIASES = {
     "Volume": ["volume", "lot", "lote", "lots", "quantity", "quantidade", "qty",
                "size", "tamanho", "amount", "contratos"],
     "Entrada": ["entrada", "entry", "open", "abertura", "open price",
-                "preço de entrada", "preco de entrada", "entry price", "price open", "price"],
+                "preço de entrada", "preco de entrada", "entry price", "price open", "price", "preço", "preco"],
     "Saída": ["saída", "saida", "exit", "close", "fechamento", "close price",
-              "preço de saída", "preco de saida", "exit price", "price close"],
+              "preço de saída", "preco de saida", "exit price", "price close", "preço_2", "preco_2", "price_2"],
     "SL": ["sl", "stop loss", "stop", "stoploss", "stop price", "stop loss price", "s/l"],
     "TP": ["tp", "take profit", "takeprofit", "take profit price", "target", "alvo", "t/p"],
     "Lucro": ["lucro", "profit", "pnl", "p&l", "resultado", "result", "gain",
@@ -359,7 +361,7 @@ COLUMN_ALIASES = {
     "Data": ["data", "date", "time", "data/hora", "data e hora", "datetime",
              "open time", "close time", "timestamp", "open date", "close date",
              "data de abertura", "data de fechamento", "hora de abertura",
-             "hora de fechamento"],
+             "hora de fechamento", "horário", "horario"],
     "Obs": ["obs", "observation", "observação", "observacao", "comment",
             "comentário", "comentario", "note", "notes", "nota", "description",
             "descrição", "descricao"],
@@ -371,6 +373,21 @@ SKIP_ASSETS = {"TOTAL", "BALANCE", "BALANÇO", "BALANCO", "SALDO", "DEPOSIT",
                "DEPÓSITO", "DEPOSITO", "WITHDRAWAL", "SAQUE", "CREDIT",
                "CRÉDITO", "CREDITO", "COMMISSION", "COMISSÃO", "COMISSAO",
                "SWAP", "EQUITY", "MARGEM", "MARGIN", "FREE MARGIN"}
+
+
+def dedupe_columns(df):
+    seen = {}
+    new_cols = []
+    for c in df.columns:
+        s = str(c)
+        if s in seen:
+            seen[s] += 1
+            new_cols.append(f"{s}_{seen[s]}")
+        else:
+            seen[s] = 1
+            new_cols.append(s)
+    df.columns = new_cols
+    return df
 
 
 def auto_map_columns(columns):
@@ -480,7 +497,8 @@ def parse_html_manual(text):
     if not table:
         raise ValueError("Nenhuma linha de dados encontrada no HTML.")
     keys = ["ticket", "open time", "type", "size", "item", "price",
-            "profit", "symbol", "close time", "s/l", "t/p", "swap"]
+            "profit", "symbol", "close time", "s/l", "t/p", "swap",
+            "horário", "horario", "ativo", "tipo", "volume", "preço", "preco", "lucro"]
     hidx = None
     for i, row in enumerate(table):
         joined = " ".join(row).lower()
@@ -495,10 +513,10 @@ def parse_html_manual(text):
     if hidx is None:
         raise ValueError("Estrutura do HTML não reconhecida.")
     header = [h if h else f"col_{i}" for i, h in enumerate(table[hidx])]
-    price_idx = [i for i, h in enumerate(header) if h.lower() == "price"]
+    price_idx = [i for i, h in enumerate(header)
+                 if h.lower() in ("price", "preço", "preco")]
     if len(price_idx) >= 2:
-        header[price_idx[0]] = "Open Price"
-        header[price_idx[1]] = "Close Price"
+        header[price_idx[1]] = "Preço_2"
     ncols = len(header)
     data = [row for row in table[hidx + 1:] if len(row) == ncols]
     if not data:
@@ -523,6 +541,7 @@ def read_html_smart(text):
             cand = cand.copy()
             cand.columns = [str(v).strip() for v in cand.iloc[0]]
             cand = cand.iloc[1:].reset_index(drop=True)
+        cand = dedupe_columns(cand.copy())
         m = auto_map_columns(cand.columns)
         if "Ativo" not in m:
             continue
@@ -532,15 +551,7 @@ def read_html_smart(text):
             best = cand
     if best is not None:
         return best
-    return parse_html_manual(text)
-
-    fname = (getattr(file, "name", "") or "").lower()
-    raw = file.getvalue()
-    text = decode_smart(raw)
-    if fname.endswith(".html") or fname.endswith(".htm") or "<table" in text[:8000].lower():
-        return read_html_smart(text)
-    sep = detect_separator(text)
-    return pd.read_csv(io.StringIO(text), sep=sep, engine="python")
+    return dedupe_columns(parse_html_manual(text))
 
 
 def read_file_smart(file):
@@ -551,6 +562,8 @@ def read_file_smart(file):
         return read_html_smart(text)
     sep = detect_separator(text)
     return pd.read_csv(io.StringIO(text), sep=sep, engine="python")
+
+
 def convert_rows(tmp, mapping):
     rows = []
     col_ativo = mapping.get("Ativo")
