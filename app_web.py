@@ -338,19 +338,21 @@ def delete_trade(uid, tid):
 # IMPORTADOR INTELIGENTE (4 camadas + HTML MT4/MT5)
 # =========================================================
 
+import re
+
 COLUMN_ALIASES = {
     "Ativo": ["ativo", "asset", "symbol", "símbolo", "simbolo", "par", "pair",
-              "instrument", "instrumento", "ticker", "mercado", "market", "currency"],
+              "instrument", "instrumento", "ticker", "mercado", "market", "currency", "item"],
     "Tipo": ["tipo", "type", "side", "lado", "direção", "direcao", "direction",
              "operation", "operacao", "ação", "acao", "action", "order type", "sentido"],
     "Volume": ["volume", "lot", "lote", "lots", "quantity", "quantidade", "qty",
                "size", "tamanho", "amount", "contratos"],
     "Entrada": ["entrada", "entry", "open", "abertura", "open price",
-                "preço de entrada", "preco de entrada", "entry price", "price open"],
+                "preço de entrada", "preco de entrada", "entry price", "price open", "price"],
     "Saída": ["saída", "saida", "exit", "close", "fechamento", "close price",
               "preço de saída", "preco de saida", "exit price", "price close"],
-    "SL": ["sl", "stop loss", "stop", "stoploss", "stop price", "stop loss price"],
-    "TP": ["tp", "take profit", "takeprofit", "take profit price", "target", "alvo"],
+    "SL": ["sl", "stop loss", "stop", "stoploss", "stop price", "stop loss price", "s/l"],
+    "TP": ["tp", "take profit", "takeprofit", "take profit price", "target", "alvo", "t/p"],
     "Lucro": ["lucro", "profit", "pnl", "p&l", "resultado", "result", "gain",
               "ganho", "net profit", "lucro líquido", "lucro liquido", "profit/loss",
               "realized p&l", "u$s", "usd", "valor", "profit loss"],
@@ -446,10 +448,59 @@ def parse_date_flexible(v):
         return ""
 
 
+def decode_smart(raw):
+    text = None
+    if raw[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        try:
+            text = raw.decode("utf-16")
+        except Exception:
+            text = None
+    if text is None:
+        for enc in ["utf-8-sig", "cp1252", "latin-1"]:
+            try:
+                text = raw.decode(enc)
+                if text.strip():
+                    break
+            except Exception:
+                continue
+    if text is None:
+        text = raw.decode("utf-8-sig", errors="replace")
+    return text.replace("\x00", "")
+
+
+def parse_html_manual(text):
+    rows = re.findall(r"<tr[^>]*>(.*?)</tr>", text, flags=re.S | re.I)
+    table = []
+    for r in rows:
+        cells = re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", r, flags=re.S | re.I)
+        if cells:
+            clean = [re.sub(r"<[^>]+>", "", c).replace("&nbsp;", " ").strip() for c in cells]
+            if len(clean) >= 3 and any(clean):
+                table.append(clean)
+    if not table:
+        raise ValueError("Nenhuma linha de dados encontrada no HTML.")
+    hidx = None
+    for i, row in enumerate(table):
+        if len(row) >= 8:
+            hidx = i
+            break
+    if hidx is None:
+        raise ValueError("Estrutura do HTML não reconhecida.")
+    header = [h if h else f"col_{i}" for i, h in enumerate(table[hidx])]
+    ncols = len(header)
+    data = [row for row in table[hidx + 1:] if len(row) == ncols]
+    if not data:
+        data = [row[:ncols] + [""] * (ncols - len(row))
+                for row in table[hidx + 1:] if len(row) >= 3]
+    return pd.DataFrame(data, columns=header)
+
+
 def read_html_smart(text):
-    tables = pd.read_html(io.StringIO(text), flavor="lxml")
-    if not tables:
-        raise ValueError("Nenhuma tabela encontrada no HTML.")
+    text = text.replace("\x00", "")
+    try:
+        tables = pd.read_html(io.StringIO(text), flavor="lxml")
+    except Exception:
+        tables = []
     best, best_score = None, -1
     for t in tables:
         if len(t) == 0:
@@ -464,16 +515,16 @@ def read_html_smart(text):
         if score > best_score:
             best_score = score
             best = cand
-    if best is None:
-        raise ValueError("Nenhuma tabela válida no HTML.")
-    return best
+    if best is not None and best_score > 0:
+        return best
+    return parse_html_manual(text)
 
 
 def read_file_smart(file):
     fname = (getattr(file, "name", "") or "").lower()
     raw = file.getvalue()
-    text = raw.decode("utf-8-sig", errors="replace")
-    if fname.endswith(".html") or fname.endswith(".htm") or "<table" in text[:5000].lower():
+    text = decode_smart(raw)
+    if fname.endswith(".html") or fname.endswith(".htm") or "<table" in text[:8000].lower():
         return read_html_smart(text)
     sep = detect_separator(text)
     return pd.read_csv(io.StringIO(text), sep=sep, engine="python")
