@@ -479,9 +479,9 @@ def parse_html_manual(text):
                 table.append(clean)
     if not table:
         raise ValueError("Nenhuma linha de dados encontrada no HTML.")
-        hidx = None
     keys = ["ticket", "open time", "type", "size", "item", "price",
-            "profit", "symbol", "close time", "s/l", "t/p"]
+            "profit", "symbol", "close time", "s/l", "t/p", "swap"]
+    hidx = None
     for i, row in enumerate(table):
         joined = " ".join(row).lower()
         if sum(1 for k in keys if k in joined) >= 3:
@@ -494,7 +494,7 @@ def parse_html_manual(text):
                 break
     if hidx is None:
         raise ValueError("Estrutura do HTML não reconhecida.")
-        header = [h if h else f"col_{i}" for i, h in enumerate(table[hidx])]
+    header = [h if h else f"col_{i}" for i, h in enumerate(table[hidx])]
     price_idx = [i for i, h in enumerate(header) if h.lower() == "price"]
     if len(price_idx) >= 2:
         header[price_idx[0]] = "Open Price"
@@ -523,16 +523,17 @@ def read_html_smart(text):
             cand = cand.copy()
             cand.columns = [str(v).strip() for v in cand.iloc[0]]
             cand = cand.iloc[1:].reset_index(drop=True)
-        score = len(auto_map_columns(cand.columns)) * 1000 + len(cand)
+        m = auto_map_columns(cand.columns)
+        if "Ativo" not in m:
+            continue
+        score = len(m) * 1000 + len(cand)
         if score > best_score:
             best_score = score
             best = cand
-    if best is not None and best_score > 0:
+    if best is not None:
         return best
     return parse_html_manual(text)
 
-
-def read_file_smart(file):
     fname = (getattr(file, "name", "") or "").lower()
     raw = file.getvalue()
     text = decode_smart(raw)
