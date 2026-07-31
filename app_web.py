@@ -543,6 +543,14 @@ def read_html_smart(text):
     return pd.read_csv(io.StringIO(text), sep=sep, engine="python")
 
 
+def read_file_smart(file):
+    fname = (getattr(file, "name", "") or "").lower()
+    raw = file.getvalue()
+    text = decode_smart(raw)
+    if fname.endswith(".html") or fname.endswith(".htm") or "<table" in text[:8000].lower():
+        return read_html_smart(text)
+    sep = detect_separator(text)
+    return pd.read_csv(io.StringIO(text), sep=sep, engine="python")
 def convert_rows(tmp, mapping):
     rows = []
     col_ativo = mapping.get("Ativo")
