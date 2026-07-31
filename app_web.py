@@ -479,14 +479,26 @@ def parse_html_manual(text):
                 table.append(clean)
     if not table:
         raise ValueError("Nenhuma linha de dados encontrada no HTML.")
-    hidx = None
+        hidx = None
+    keys = ["ticket", "open time", "type", "size", "item", "price",
+            "profit", "symbol", "close time", "s/l", "t/p"]
     for i, row in enumerate(table):
-        if len(row) >= 8:
+        joined = " ".join(row).lower()
+        if sum(1 for k in keys if k in joined) >= 3:
             hidx = i
             break
     if hidx is None:
+        for i, row in enumerate(table):
+            if len(row) >= 8:
+                hidx = i
+                break
+    if hidx is None:
         raise ValueError("Estrutura do HTML não reconhecida.")
-    header = [h if h else f"col_{i}" for i, h in enumerate(table[hidx])]
+        header = [h if h else f"col_{i}" for i, h in enumerate(table[hidx])]
+    price_idx = [i for i, h in enumerate(header) if h.lower() == "price"]
+    if len(price_idx) >= 2:
+        header[price_idx[0]] = "Open Price"
+        header[price_idx[1]] = "Close Price"
     ncols = len(header)
     data = [row for row in table[hidx + 1:] if len(row) == ncols]
     if not data:
