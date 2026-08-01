@@ -1227,9 +1227,9 @@ with tab_h:
     if df.empty:
         st.info("Nenhum trade.")
     else:
-        if "confirm_bulk_ids" in st.session_state:
+                if "confirm_bulk_ids" in st.session_state:
             ids = st.session_state["confirm_bulk_ids"]
-                        st.warning(f"⚠️ Excluir {len(ids)} trade(s) selecionado(s)? Esta ação não pode ser desfeita.")
+            st.warning(f"⚠️ Excluir {len(ids)} trade(s) selecionado(s)? Esta ação não pode ser desfeita.")
             st.info(f"⏳ A exclusão não é imediata: leva cerca de {max(1, round(len(ids) * 0.8))} segundo(s). Não feche a página até ver a confirmação ✅.")
             cc, cx = st.columns(2)
             with cc:
@@ -1250,7 +1250,7 @@ with tab_h:
             st.divider()
 
         if st.session_state.get("confirm_delete_all"):
-                        st.warning(f"⚠️ Excluir TODOS os {len(df)} trades? Esta ação não pode ser desfeita.")
+            st.warning(f"⚠️ Excluir TODOS os {len(df)} trades? Esta ação não pode ser desfeita.")
             st.info(f"⏳ A exclusão não é imediata: leva cerca de {max(1, round(len(df) * 0.8))} segundo(s). Não feche a página até ver a confirmação ✅.")
             cc, cx = st.columns(2)
             with cc:
@@ -1269,8 +1269,7 @@ with tab_h:
                     st.session_state["confirm_delete_all"] = False
                     st.rerun()
             st.divider()
-
-        eid = st.session_state.get("editing_trade_id")
+            eid = st.session_state.get("editing_trade_id")
         if eid:
             tr = df[df["id"] == eid]
             if not tr.empty:
