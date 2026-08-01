@@ -369,7 +369,8 @@ SELL_WORDS = ["sell", "venda", "vender", "short", "put", "down", "s", "0", "-1",
 SKIP_ASSETS = {"TOTAL", "BALANCE", "BALANÇO", "BALANCO", "SALDO", "DEPOSIT",
                "DEPÓSITO", "DEPOSITO", "WITHDRAWAL", "SAQUE", "CREDIT",
                "CRÉDITO", "CREDITO", "COMMISSION", "COMISSÃO", "COMISSAO",
-               "SWAP", "EQUITY", "MARGEM", "MARGIN", "FREE MARGIN", "ATIVO", "SYMBOL", "TICKET", "LUCRO", "BRUTO", "REBAIXAMENTO"}
+               "SWAP", "EQUITY", "MARGEM", "MARGIN", "FREE MARGIN",
+               "ATIVO", "SYMBOL", "TICKET", "LUCRO", "BRUTO", "REBAIXAMENTO"}
 
 
 def dedupe_columns(df):
@@ -1227,7 +1228,7 @@ with tab_h:
     if df.empty:
         st.info("Nenhum trade.")
     else:
-                if "confirm_bulk_ids" in st.session_state:
+        if "confirm_bulk_ids" in st.session_state:
             ids = st.session_state["confirm_bulk_ids"]
             st.warning(f"⚠️ Excluir {len(ids)} trade(s) selecionado(s)? Esta ação não pode ser desfeita.")
             st.info(f"⏳ A exclusão não é imediata: leva cerca de {max(1, round(len(ids) * 0.8))} segundo(s). Não feche a página até ver a confirmação ✅.")
@@ -1269,7 +1270,8 @@ with tab_h:
                     st.session_state["confirm_delete_all"] = False
                     st.rerun()
             st.divider()
-            eid = st.session_state.get("editing_trade_id")
+
+        eid = st.session_state.get("editing_trade_id")
         if eid:
             tr = df[df["id"] == eid]
             if not tr.empty:
@@ -1340,9 +1342,7 @@ with tab_h:
             lbl = f"{r['Data']}  |  {r['Ativo']}  |  {r['Tipo']}  |  $ {float(r['Lucro']):,.2f}  |  #{str(r['id'])[:4]}"
             labels.append(lbl)
             label_to_id[lbl] = r["id"]
-        sel_labels = st.multiselect(
-            "Selecione um ou mais trades",
-            options=labels)
+        sel_labels = st.multiselect("Selecione um ou mais trades", options=labels)
         sel_ids = [label_to_id[l] for l in sel_labels]
         if sel_labels:
             st.caption(f"{len(sel_ids)} trade(s) selecionado(s).")
@@ -1367,6 +1367,7 @@ with tab_h:
 # =========================================================
 # NEW TRADE
 # =========================================================
+
 with tab_n:
     cc = len(df)
     fl = not is_pro and cc >= FREE_TRADE_LIMIT
