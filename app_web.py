@@ -697,7 +697,7 @@ def save_aporte(uid, value):
 
 
 # =========================================================
-# FORMATTERS (projecao)
+# FORMATTERS + SEMAFORO + CARDS
 # =========================================================
 
 def fmt_money(v):
@@ -711,6 +711,24 @@ def fmt_mult(v):
     if v >= 1e6: return f"{v/1e6:,.2f}M x"
     if v >= 1e3: return f"{v/1e3:,.1f}K x"
     return f"{v:,.2f}x"
+
+def sem_wr(v):
+    return "good" if v >= 55 else ("ok" if v >= 40 else "bad")
+
+def sem_ratio(v):
+    return "good" if v >= 1.5 else ("ok" if v >= 1.0 else "bad")
+
+def metric_card(label, value, help_text, status="none", sub=""):
+    color = {"good": "#3fb950", "ok": "#d29922",
+             "bad": "#f85149", "none": "#58a6ff"}.get(status, "#58a6ff")
+    sub_html = f'<p style="margin:4px 0 0 0; font-size:12px; opacity:.7;">{sub}</p>' if sub else ""
+    st.markdown(
+        f'<div class="plan-card" style="border-left:5px solid {color}; padding:14px; margin-bottom:0;">'
+        f'<p style="margin:0; font-size:13px; opacity:.85;">{label} '
+        f'<span title="{help_text}" style="cursor:help;">ⓘ</span></p>'
+        f'<h3 style="margin:6px 0 0 0;">{value}</h3>{sub_html}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 # =========================================================
@@ -950,6 +968,39 @@ gp = win_df["Lucro"].sum()
 gl = abs(loss_df["Lucro"].sum())
 pf = gp / gl if gl > 0 else 0
 
+avg_win = float(win_df["Lucro"].mean()) if win_count > 0 else 0.0
+avg_loss = abs(float(loss_df["Lucro"].mean())) if loss_count > 0 else 0.0
+payoff = (avg_win / avg_loss) if avg_loss > 0 else (float("inf") if avg_win > 0 else 0.0)
+if len(df) > 0:
+    wr_frac = win_count / len(df)
+    expectancy = wr_frac * avg_win - (1 - wr_frac) * avg_loss
+else:
+    expectancy = 0.0
+expectancy_pct = (expectancy / base_capital * 100) if base_capital > 0 else 0.0
+
+if len(df) > 0:
+    eq_curve = base_capital + df["Lucro"].cumsum()
+    peak = eq_curve.cummax()
+    dd = peak - eq_curve
+    max_dd = float(dd.max())
+    max_dd_pct = float((dd / peak.clip(lower=1e-9) * 100).max())
+else:
+    max_dd = 0.0
+    max_dd_pct = 0.0
+
+max_loss_streak = 0
+_cur = 0
+for _v in df["Lucro"]:
+    if _v < 0:
+        _cur += 1
+        if _cur > max_loss_streak:
+            max_loss_streak = _cur
+    else:
+        _cur = 0
+
+best_row = df.loc[df["Lucro"].idxmax()] if len(df) > 0 else None
+worst_row = df.loc[df["Lucro"].idxmin()] if len(df) > 0 else None
+
 
 # =========================================================
 # DASHBOARD
@@ -958,16 +1009,52 @@ pf = gp / gl if gl > 0 else 0
 st.title("📊 Trader Strategy Analytics Pro")
 
 r1, r2, r3, r4 = st.columns(4)
-r1.metric("💰 Capital Inicial", f"$ {ic:,.2f}")
-r2.metric("➕ Total Aportes", f"$ {deposit_total:,.2f}")
-r3.metric("📊 Resultado", f"$ {total_profit:,.2f}")
-r4.metric("💵 Equity Final", f"$ {equity:,.2f}")
+r1.metric("💰 Capital Inicial", f"$ {ic:,.2f}",
+          help="Valor que voce comecou a operar. Editavel na sidebar.")
+r2.metric("➕ Total Aportes", f"$ {deposit_total:,.2f}",
+          help="Soma de todos os depositos extras registrados.")
+r3.metric("📊 Resultado", f"$ {total_profit:,.2f}",
+          help="Lucro ou prejuizo acumulado de todas as operacoes.")
+r4.metric("💵 Equity Final", f"$ {equity:,.2f}",
+          help="Capital inicial + aportes + resultado acumulado.")
 
+st.markdown("")
+p1, p2, p3, p4 = st.columns(4)
+with p1:
+    metric_card("🎯 Win Rate", f"{win_rate:.1f}%",
+                "Percentual de trades vencedores. Verde acima de 55%, amarelo entre 40 e 55%, vermelho abaixo de 40%.",
+                sem_wr(win_rate), "Meta profissional: acima de 50%")
+with p2:
+    metric_card("📈 Profit Factor", f"{pf:.2f}",
+                "Lucro bruto dividido pela perda bruta. Verde acima de 1.5, amarelo entre 1.0 e 1.5, vermelho abaixo de 1.0 (sistema no prejuizo).",
+                sem_ratio(pf), "Acima de 1.0 = sistema lucrativo")
+with p3:
+    pf_disp = "∞" if payoff == float("inf") else f"{payoff:.2f}"
+    metric_card("⚖️ Payoff", pf_disp,
+                "Ganho medio dividido pela perda media. Mostra se suas vitorias pagam suas derrotas.",
+                sem_ratio(payoff if payoff != float("inf") else 99), "Ideal acima de 1.5")
+with p4:
+    metric_card("🎲 Expectativa por Trade", f"$ {expectancy:,.2f}",
+                "Quanto voce ganha em media por trade. Positivo significa vantagem estatistica a seu favor.",
+                "good" if expectancy > 0 else "bad",
+                f"{expectancy_pct:+.2f}% do capital por trade")
+
+st.markdown("")
 s1, s2, s3, s4 = st.columns(4)
-s1.metric("✅ Vitórias", win_count)
-s2.metric("❌ Derrotas", loss_count)
-s3.metric("🎯 Win Rate", f"{win_rate:.1f}%")
-s4.metric("📈 Profit Factor", f"{pf:.2f}")
+s1.metric("✅ Vitórias", win_count, help="Total de trades com lucro.")
+s2.metric("❌ Derrotas", loss_count, help="Total de trades com prejuizo.")
+s3.metric("📉 Drawdown Máx", f"$ {max_dd:,.2f}",
+          help="Maior queda da conta a partir de um topo. Mede o pior momento que sua conta ja viveu.")
+s4.metric("🔻 Sequência de Perdas", max_loss_streak,
+          help="Maior numero de perdas consecutivas. Ajuda a preparar o psicologico.")
+
+if best_row is not None:
+    st.caption(
+        f"🏆 Melhor trade: **{best_row['Ativo']}** em {best_row['Data']} "
+        f"($ {float(best_row['Lucro']):+,.2f})   •   "
+        f"💀 Pior trade: **{worst_row['Ativo']}** em {worst_row['Data']} "
+        f"($ {float(worst_row['Lucro']):+,.2f})"
+    )
 
 st.divider()
 
