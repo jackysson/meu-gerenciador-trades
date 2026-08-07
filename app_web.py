@@ -1291,7 +1291,7 @@ with tab_g:
                         "Multiplicador": fmt_mult(proj / base_capital),
                     })
 
-                                proj_final = curva_v[-1]
+                proj_final = curva_v[-1]
                 mult_final = proj_final / base_capital if base_capital > 0 else 0.0
                 pct_final = (mult_final - 1) * 100
                 m1, m2, m3 = st.columns(3)
