@@ -28,6 +28,9 @@ TRADE_COLUMNS = [
     "Entrada", "Saída", "SL", "TP", "Lucro", "Obs",
 ]
 
+PERIOD_OPTIONS = ["🗓️ Tudo", "📅 Este mês", "🕒 Últimos 30 dias",
+                  "📆 Últimos 90 dias", "🎯 Este ano"]
+
 
 # =========================================================
 # LOGIN CHECK & PAGE
@@ -697,7 +700,7 @@ def save_aporte(uid, value):
 
 
 # =========================================================
-# FORMATTERS + SEMAFORO + CARDS
+# FORMATTERS + SEMAFORO + CARDS + PERIODO
 # =========================================================
 
 def fmt_money(v):
@@ -729,6 +732,27 @@ def metric_card(label, value, help_text, status="none", sub=""):
         f'<h3 style="margin:6px 0 0 0;">{value}</h3>{sub_html}</div>',
         unsafe_allow_html=True,
     )
+
+
+def period_start(period):
+    now = datetime.now()
+    if period == "📅 Este mês":
+        return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if period == "🕒 Últimos 30 dias":
+        return now - pd.Timedelta(days=30)
+    if period == "📆 Últimos 90 dias":
+        return now - pd.Timedelta(days=90)
+    if period == "🎯 Este ano":
+        return now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    return None
+
+
+def filter_by_period(dframe, period):
+    start = period_start(period)
+    if start is None or dframe.empty:
+        return dframe
+    datas = pd.to_datetime(dframe["Data"], errors="coerce")
+    return dframe[datas >= pd.Timestamp(start)].reset_index(drop=True)
 
 
 # =========================================================
@@ -941,28 +965,40 @@ with st.sidebar:
 
 
 # =========================================================
-# METRICS
+# DASHBOARD + PERIODO + METRICAS
 # =========================================================
 
-df = st.session_state["df_trades"].copy()
+ic = st.session_state["initial_capital"]
+deposit_total = st.session_state.get("deposit_total", 0.0)
+deposit_events = st.session_state.get("deposit_events", [])
+base_capital = ic + deposit_total
 
+st.title("📊 Trader Strategy Analytics Pro")
+
+period = st.radio("Período de análise", PERIOD_OPTIONS,
+                  horizontal=True, key="period_filter")
+if period != "🗓️ Tudo":
+    st.caption(f"📊 Métricas, gráficos e histórico refletindo: **{period}**")
+
+# ---- conta inteira (nunca filtra) ----
+df_all = st.session_state["df_trades"].copy()
 for col in ["Lucro", "Entrada", "Saída", "SL", "TP", "Volume"]:
-    if col not in df.columns:
-        df[col] = 0
-    df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+    if col not in df_all.columns:
+        df_all[col] = 0
+    df_all[col] = pd.to_numeric(df_all[col], errors="coerce").fillna(0)
 
+total_profit_all = float(df_all["Lucro"].sum())
+equity = base_capital + total_profit_all
+
+# ---- periodo selecionado ----
+df = filter_by_period(df_all, period)
 loss_df = df[df["Lucro"] < 0]
 win_df = df[df["Lucro"] > 0]
 loss_count = len(loss_df)
 win_count = len(win_df)
 avg_loss_cash = abs(loss_df["Lucro"].mean()) if loss_count > 0 else 0
 avg_loss_pts = abs(loss_df["Entrada"] - loss_df["SL"]).mean() if loss_count > 0 else 0
-total_profit = df["Lucro"].sum()
-ic = st.session_state["initial_capital"]
-deposit_total = st.session_state.get("deposit_total", 0.0)
-deposit_events = st.session_state.get("deposit_events", [])
-base_capital = ic + deposit_total
-equity = base_capital + total_profit
+total_profit = float(df["Lucro"].sum())
 win_rate = win_count / len(df) * 100 if len(df) > 0 else 0
 gp = win_df["Lucro"].sum()
 gl = abs(loss_df["Lucro"].sum())
@@ -983,10 +1019,8 @@ if len(df) > 0:
     peak = eq_curve.cummax()
     dd = peak - eq_curve
     max_dd = float(dd.max())
-    max_dd_pct = float((dd / peak.clip(lower=1e-9) * 100).max())
 else:
     max_dd = 0.0
-    max_dd_pct = 0.0
 
 max_loss_streak = 0
 _cur = 0
@@ -1001,58 +1035,51 @@ for _v in df["Lucro"]:
 best_row = df.loc[df["Lucro"].idxmax()] if len(df) > 0 else None
 worst_row = df.loc[df["Lucro"].idxmin()] if len(df) > 0 else None
 
-
-# =========================================================
-# DASHBOARD
-# =========================================================
-
-st.title("📊 Trader Strategy Analytics Pro")
-
 r1, r2, r3, r4 = st.columns(4)
 r1.metric("💰 Capital Inicial", f"$ {ic:,.2f}",
-          help="Valor que voce comecou a operar. Editavel na sidebar.")
+          help="Valor que voce comecou a operar. Editavel na sidebar. (Conta inteira)")
 r2.metric("➕ Total Aportes", f"$ {deposit_total:,.2f}",
-          help="Soma de todos os depositos extras registrados.")
-r3.metric("📊 Resultado", f"$ {total_profit:,.2f}",
-          help="Lucro ou prejuizo acumulado de todas as operacoes.")
+          help="Soma de todos os depositos extras registrados. (Conta inteira)")
+r3.metric("📊 Resultado do Período", f"$ {total_profit:,.2f}",
+          help="Lucro ou prejuizo acumulado apenas no periodo selecionado acima.")
 r4.metric("💵 Equity Final", f"$ {equity:,.2f}",
-          help="Capital inicial + aportes + resultado acumulado.")
+          help="Capital inicial + aportes + resultado acumulado da conta inteira.")
 
 st.markdown("")
 p1, p2, p3, p4 = st.columns(4)
 with p1:
     metric_card("🎯 Win Rate", f"{win_rate:.1f}%",
-                "Percentual de trades vencedores. Verde acima de 55%, amarelo entre 40 e 55%, vermelho abaixo de 40%.",
+                "Percentual de trades vencedores no periodo. Verde acima de 55%, amarelo entre 40 e 55%, vermelho abaixo de 40%.",
                 sem_wr(win_rate), "Meta profissional: acima de 50%")
 with p2:
     metric_card("📈 Profit Factor", f"{pf:.2f}",
-                "Lucro bruto dividido pela perda bruta. Verde acima de 1.5, amarelo entre 1.0 e 1.5, vermelho abaixo de 1.0 (sistema no prejuizo).",
+                "Lucro bruto dividido pela perda bruta no periodo. Verde acima de 1.5, amarelo entre 1.0 e 1.5, vermelho abaixo de 1.0.",
                 sem_ratio(pf), "Acima de 1.0 = sistema lucrativo")
 with p3:
     pf_disp = "∞" if payoff == float("inf") else f"{payoff:.2f}"
     metric_card("⚖️ Payoff", pf_disp,
-                "Ganho medio dividido pela perda media. Mostra se suas vitorias pagam suas derrotas.",
+                "Ganho medio dividido pela perda media no periodo. Mostra se suas vitorias pagam suas derrotas.",
                 sem_ratio(payoff if payoff != float("inf") else 99), "Ideal acima de 1.5")
 with p4:
     metric_card("🎲 Expectativa por Trade", f"$ {expectancy:,.2f}",
-                "Quanto voce ganha em media por trade. Positivo significa vantagem estatistica a seu favor.",
+                "Quanto voce ganha em media por trade no periodo. Positivo significa vantagem estatistica a seu favor.",
                 "good" if expectancy > 0 else "bad",
                 f"{expectancy_pct:+.2f}% do capital por trade")
 
 st.markdown("")
 s1, s2, s3, s4 = st.columns(4)
-s1.metric("✅ Vitórias", win_count, help="Total de trades com lucro.")
-s2.metric("❌ Derrotas", loss_count, help="Total de trades com prejuizo.")
+s1.metric("✅ Vitórias", win_count, help="Trades com lucro no periodo.")
+s2.metric("❌ Derrotas", loss_count, help="Trades com prejuizo no periodo.")
 s3.metric("📉 Drawdown Máx", f"$ {max_dd:,.2f}",
-          help="Maior queda da conta a partir de um topo. Mede o pior momento que sua conta ja viveu.")
+          help="Maior queda da conta a partir de um topo dentro do periodo selecionado.")
 s4.metric("🔻 Sequência de Perdas", max_loss_streak,
-          help="Maior numero de perdas consecutivas. Ajuda a preparar o psicologico.")
+          help="Maior numero de perdas consecutivas no periodo.")
 
 if best_row is not None:
     st.caption(
-        f"🏆 Melhor trade: **{best_row['Ativo']}** em {best_row['Data']} "
+        f"🏆 Melhor trade do período: **{best_row['Ativo']}** em {best_row['Data']} "
         f"($ {float(best_row['Lucro']):+,.2f})   •   "
-        f"💀 Pior trade: **{worst_row['Ativo']}** em {worst_row['Data']} "
+        f"💀 Pior trade do período: **{worst_row['Ativo']}** em {worst_row['Data']} "
         f"($ {float(worst_row['Lucro']):+,.2f})"
     )
 
@@ -1079,7 +1106,7 @@ with tab_g:
     else:
         st.subheader("📈 Evolução do Capital da Conta")
         eventos = []
-        for _, row in df.iterrows():
+        for _, row in df_all.iterrows():
             dtp = pd.to_datetime(row["Data"], errors="coerce")
             if pd.notna(dtp):
                 eventos.append((dtp.to_pydatetime(), float(row["Lucro"])))
@@ -1098,7 +1125,7 @@ with tab_g:
                              template=PLOTLY_TEMPLATE,
                              color_discrete_sequence=["#3fb950"])
             st.plotly_chart(fig_ev, use_container_width=True)
-            st.caption("📌 Eixo X: data de cada operação e aporte | Eixo Y: saldo real da conta em dólares (capital inicial + aportes + resultado acumulado).")
+            st.caption("📌 Eixo X: data de cada operação e aporte | Eixo Y: saldo real da conta em dólares. Mostra o histórico COMPLETO, independente do período selecionado.")
         else:
             st.info("Sem datas válidas para montar a evolução.")
 
@@ -1113,7 +1140,7 @@ with tab_g:
                             template=PLOTLY_TEMPLATE,
                             color_discrete_sequence=["#58a6ff"])
             st.plotly_chart(fig_gm, use_container_width=True)
-            st.caption("📌 Eixo X: quantidade de trades realizados | Eixo Y: ganho médio acumulado por trade em dólares.")
+            st.caption("📌 Eixo X: quantidade de trades no período | Eixo Y: ganho médio acumulado por trade em dólares.")
         with b:
             ml = win_df["Lucro"].expanding().mean().reset_index(drop=True)
             if len(ml) > 0:
@@ -1123,9 +1150,9 @@ with tab_g:
                                 template=PLOTLY_TEMPLATE,
                                 color_discrete_sequence=["#3fb950"])
                 st.plotly_chart(fig_ml, use_container_width=True)
-                st.caption("📌 Eixo X: sequência de trades vencedores | Eixo Y: valor médio de lucro em dólares dos trades positivos.")
+                st.caption("📌 Eixo X: sequência de trades vencedores no período | Eixo Y: valor médio de lucro em dólares.")
             else:
-                st.info("Nenhum trade vencedor ainda.")
+                st.info("Nenhum trade vencedor no período.")
 
         c, d = st.columns(2)
         with c:
@@ -1136,7 +1163,7 @@ with tab_g:
                             template=PLOTLY_TEMPLATE,
                             color_discrete_sequence=["#d29922"])
             st.plotly_chart(fig_ga, use_container_width=True)
-            st.caption("📌 Eixo X: quantidade de trades | Eixo Y: lucro total acumulado em dólares até aquele trade.")
+            st.caption("📌 Eixo X: quantidade de trades no período | Eixo Y: lucro acumulado em dólares até aquele trade.")
         with d:
             rdf = df.copy()
             rdf["Risco"] = abs(rdf["Entrada"] - rdf["SL"])
@@ -1172,10 +1199,10 @@ with tab_g:
                         rate_pct = st.slider("% por trade", 0.1, 10.0,
                                              default_rate, 0.1,
                                              key="proj_rate") / 100.0
-                        st.caption(f"Sua média histórica: {hist_rate*100:.2f}%/trade")
+                        st.caption(f"Sua média no período: {hist_rate*100:.2f}%/trade")
                     else:
                         rate_pct = None
-                        st.caption(f"Sua média histórica: $ {avg_per_trade:,.2f}/trade")
+                        st.caption(f"Sua média no período: $ {avg_per_trade:,.2f}/trade")
 
                 counts = sorted({n for n in [10, 50, 100, 250, 500, int(custom_n)]
                                  if n <= int(custom_n)})
@@ -1213,25 +1240,25 @@ with tab_g:
                 if max(curva_v) > 1_000_000:
                     fig_proj.update_yaxes(type="log")
                 st.plotly_chart(fig_proj, use_container_width=True)
-                st.caption("📌 Eixo X: quantidade de trades | Eixo Y: equity projetado em dólares (escala logarítmica quando os valores são muito grandes).")
+                st.caption("📌 Eixo X: quantidade de trades | Eixo Y: equity projetado em dólares (escala logarítmica quando os valores são muito grandes). Baseada no desempenho do período selecionado.")
 
                 st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
                 if hist_rate > 0.05 and rate_pct is not None:
                     st.warning(
-                        f"⚠️ Sua média histórica ({hist_rate*100:.1f}%/trade) é alta demais "
+                        f"⚠️ Sua média no período ({hist_rate*100:.1f}%/trade) é alta demais "
                         "para projetar a longo prazo com juros compostos. O slider começa em "
                         "um valor conservador — ajuste com cautela."
                     )
                 if avg_per_trade <= 0:
-                    st.warning("Seu resultado médio atual é negativo ou zero — a projeção mostra o impacto de manter esse desempenho.")
+                    st.warning("Seu resultado médio no período é negativo ou zero — a projeção mostra o impacto de manter esse desempenho.")
                 st.caption(
                     f"Base de cálculo: capital $ {base_capital:,.2f} | "
                     f"modo {'composto ' + f'{(rate_pct or 0)*100:.1f}%/trade' if rate_pct else 'linear $ ' + f'{avg_per_trade:,.2f}/trade'}. "
                     "Projeção teórica; não garante resultados futuros."
                 )
             else:
-                st.info("Registre trades para calcular a projeção.")
+                st.info("Registre trades no período para calcular a projeção.")
 
             st.divider()
             e, f = st.columns(2)
@@ -1272,7 +1299,7 @@ with tab_i:
     else:
         st.header("📚 Resumo")
         if df.empty:
-            st.info("Adicione trades.")
+            st.info("Adicione trades no período selecionado.")
         else:
             st.markdown(f"""
             <div class="insight-card">
@@ -1288,11 +1315,12 @@ with tab_i:
                 <h4>🧮 Simulacao 30 trades</h4>
                 <p><b>$ {s30:,.2f}</b></p>
             </div>""", unsafe_allow_html=True)
-            st.caption("Simulacao historica. Nao garante resultados.")
+            st.caption("Simulacao historica baseada no periodo. Nao garante resultados.")
 
             st.divider()
             st.subheader("🏆 Insignias")
-            badges = calc_badges(df)
+            st.caption("Conquistas contam sua história COMPLETA, independente do período.")
+            badges = calc_badges(df_all)
             if not badges:
                 st.info("Registre operacoes para desbloquear.")
             else:
@@ -1312,7 +1340,7 @@ with tab_i:
 # =========================================================
 
 with tab_h:
-    if df.empty:
+    if df_all.empty:
         st.info("Nenhum trade.")
     else:
         if "confirm_bulk_ids" in st.session_state:
@@ -1338,13 +1366,13 @@ with tab_h:
             st.divider()
 
         if st.session_state.get("confirm_delete_all"):
-            st.warning(f"⚠️ Excluir TODOS os {len(df)} trades? Esta ação não pode ser desfeita.")
-            st.info(f"⏳ A exclusão não é imediata: leva cerca de {max(1, round(len(df) * 0.8))} segundo(s). Não feche a página até ver a confirmação ✅.")
+            st.warning(f"⚠️ Excluir TODOS os {len(df_all)} trades da sua conta? Esta ação não pode ser desfeita.")
+            st.info(f"⏳ A exclusão não é imediata: leva cerca de {max(1, round(len(df_all) * 0.8))} segundo(s). Não feche a página até ver a confirmação ✅.")
             cc, cx = st.columns(2)
             with cc:
                 if st.button("✅ Sim, excluir tudo", type="primary", use_container_width=True):
                     try:
-                        for tid in df["id"].tolist():
+                        for tid in df_all["id"].tolist():
                             delete_trade(usuario_id, tid)
                         st.session_state["confirm_delete_all"] = False
                         st.session_state["df_trades"] = load_trades(usuario_id)
@@ -1360,7 +1388,7 @@ with tab_h:
 
         eid = st.session_state.get("editing_trade_id")
         if eid:
-            tr = df[df["id"] == eid]
+            tr = df_all[df_all["id"] == eid]
             if not tr.empty:
                 r = tr.iloc[0]
                 st.subheader("✏️ Editar Trade")
@@ -1417,38 +1445,44 @@ with tab_h:
                             st.rerun()
             st.divider()
 
-        dcols = [c for c in TRADE_COLUMNS if c != "id"]
-        st.dataframe(df[dcols].sort_index(ascending=False),
-                     use_container_width=True, hide_index=True)
-        st.divider()
+        if period != "🗓️ Tudo":
+            st.caption(f"🔎 Mostrando **{len(df)}** de **{len(df_all)}** trades (período: {period}). Mude o período no topo para ver mais.")
 
-        st.subheader("Acoes por trade")
-        labels = []
-        label_to_id = {}
-        for _, r in df.sort_index(ascending=False).iterrows():
-            lbl = f"{r['Data']}  |  {r['Ativo']}  |  {r['Tipo']}  |  $ {float(r['Lucro']):,.2f}  |  #{str(r['id'])[:4]}"
-            labels.append(lbl)
-            label_to_id[lbl] = r["id"]
-        sel_labels = st.multiselect("Selecione um ou mais trades", options=labels)
-        sel_ids = [label_to_id[l] for l in sel_labels]
-        if sel_labels:
-            st.caption(f"{len(sel_ids)} trade(s) selecionado(s).")
+        if df.empty:
+            st.info("Nenhum trade neste período.")
+        else:
+            dcols = [c for c in TRADE_COLUMNS if c != "id"]
+            st.dataframe(df[dcols].sort_index(ascending=False),
+                         use_container_width=True, hide_index=True)
+            st.divider()
 
-        b1, b2, b3 = st.columns(3)
-        with b1:
-            if st.button("✏️ Editar", use_container_width=True,
-                         disabled=len(sel_ids) != 1):
-                st.session_state["editing_trade_id"] = sel_ids[0]
-                st.rerun()
-        with b2:
-            if st.button("🗑️ Excluir selecionados", use_container_width=True,
-                         disabled=len(sel_ids) == 0):
-                st.session_state["confirm_bulk_ids"] = sel_ids
-                st.rerun()
-        with b3:
-            if st.button("☠️ Excluir TODOS", use_container_width=True):
-                st.session_state["confirm_delete_all"] = True
-                st.rerun()
+            st.subheader("Acoes por trade")
+            labels = []
+            label_to_id = {}
+            for _, r in df.sort_index(ascending=False).iterrows():
+                lbl = f"{r['Data']}  |  {r['Ativo']}  |  {r['Tipo']}  |  $ {float(r['Lucro']):,.2f}  |  #{str(r['id'])[:4]}"
+                labels.append(lbl)
+                label_to_id[lbl] = r["id"]
+            sel_labels = st.multiselect("Selecione um ou mais trades", options=labels)
+            sel_ids = [label_to_id[l] for l in sel_labels]
+            if sel_labels:
+                st.caption(f"{len(sel_ids)} trade(s) selecionado(s).")
+
+            b1, b2, b3 = st.columns(3)
+            with b1:
+                if st.button("✏️ Editar", use_container_width=True,
+                             disabled=len(sel_ids) != 1):
+                    st.session_state["editing_trade_id"] = sel_ids[0]
+                    st.rerun()
+            with b2:
+                if st.button("🗑️ Excluir selecionados", use_container_width=True,
+                             disabled=len(sel_ids) == 0):
+                    st.session_state["confirm_bulk_ids"] = sel_ids
+                    st.rerun()
+            with b3:
+                if st.button("☠️ Excluir TODOS", use_container_width=True):
+                    st.session_state["confirm_delete_all"] = True
+                    st.rerun()
 
 
 # =========================================================
@@ -1456,7 +1490,7 @@ with tab_h:
 # =========================================================
 
 with tab_n:
-    cc = len(df)
+    cc = len(df_all)
     fl = not is_pro and cc >= FREE_TRADE_LIMIT
 
     if fl:
