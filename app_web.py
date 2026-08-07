@@ -965,7 +965,7 @@ with st.sidebar:
 
 
 # =========================================================
-# DASHBOARD + PERIODO + METRICAS
+# DASHBOARD + PERIODO + METRICAS + ONBOARDING
 # =========================================================
 
 ic = st.session_state["initial_capital"]
@@ -974,11 +974,6 @@ deposit_events = st.session_state.get("deposit_events", [])
 base_capital = ic + deposit_total
 
 st.title("📊 Trader Strategy Analytics Pro")
-
-period = st.radio("Período de análise", PERIOD_OPTIONS,
-                  horizontal=True, key="period_filter")
-if period != "🗓️ Tudo":
-    st.caption(f"📊 Métricas, gráficos e histórico refletindo: **{period}**")
 
 # ---- conta inteira (nunca filtra) ----
 df_all = st.session_state["df_trades"].copy()
@@ -989,6 +984,53 @@ for col in ["Lucro", "Entrada", "Saída", "SL", "TP", "Volume"]:
 
 total_profit_all = float(df_all["Lucro"].sum())
 equity = base_capital + total_profit_all
+
+# ---- periodo ----
+if not df_all.empty:
+    period = st.radio("Período de análise", PERIOD_OPTIONS,
+                      horizontal=True, key="period_filter")
+    if period != "🗓️ Tudo":
+        st.caption(f"📊 Métricas, gráficos e histórico refletindo: **{period}**")
+else:
+    period = "🗓️ Tudo"
+
+# ---- ONBOARDING (conta vazia) ----
+if df_all.empty:
+    st.markdown(f"""
+        <div class="plan-card" style="text-align:center; padding:40px 20px; margin-bottom:20px;">
+            <h1 style="margin:0 0 10px 0;">👋 Bem-vindo(a), {usuario_nome}!</h1>
+            <p style="margin:0; font-size:16px;">Seu painel esta pronto. Em 3 passos ele vira o seu centro de comando do trading.</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("""
+        <div class="insight-card">
+            <h4>🚀 Inicio rapido</h4>
+            <p>✅ <b>1. Entrar com o Google</b> — conta criada e dados salvos na nuvem com seguranca.</p>
+            <p>⬜ <b>2. Trazer suas operacoes</b> — importe seu historico pelo botao 📤 Importar na barra lateral (MT4/MT5, Binance, cTrader ou CSV) ou registre a primeira na aba ➕ Novo Trade.</p>
+            <p>⬜ <b>3. Desbloquear a primeira insignia</b> — com 10 trades registrados voce ganha a 📝 Diario Iniciado.</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    h1, h2 = st.columns(2)
+    with h1:
+        st.markdown("""
+            <div class="plan-card">
+                <h4>📤 Ja opera em alguma plataforma?</h4>
+                <p>Exporte o historico (na MT5: botao direito em Historico → Salvar como Relatorio) e envie na barra lateral. Centenas de trades entram em segundos, sem digitar nada.</p>
+            </div>
+            """, unsafe_allow_html=True)
+    with h2:
+        st.markdown("""
+            <div class="plan-card">
+                <h4>✍️ Comecando agora?</h4>
+                <p>Va na aba ➕ Novo Trade e registre cada operacao ao fechar. Em poucos dias voce tera estatisticas reais do seu desempenho.</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+    if st.button("🔄 Ja fiz — atualizar painel", use_container_width=True):
+        st.session_state["df_trades"] = load_trades(usuario_id)
+        st.rerun()
 
 # ---- periodo selecionado ----
 df = filter_by_period(df_all, period)
@@ -1035,53 +1077,55 @@ for _v in df["Lucro"]:
 best_row = df.loc[df["Lucro"].idxmax()] if len(df) > 0 else None
 worst_row = df.loc[df["Lucro"].idxmin()] if len(df) > 0 else None
 
-r1, r2, r3, r4 = st.columns(4)
-r1.metric("💰 Capital Inicial", f"$ {ic:,.2f}",
-          help="Valor que voce comecou a operar. Editavel na sidebar. (Conta inteira)")
-r2.metric("➕ Total Aportes", f"$ {deposit_total:,.2f}",
-          help="Soma de todos os depositos extras registrados. (Conta inteira)")
-r3.metric("📊 Resultado do Período", f"$ {total_profit:,.2f}",
-          help="Lucro ou prejuizo acumulado apenas no periodo selecionado acima.")
-r4.metric("💵 Equity Final", f"$ {equity:,.2f}",
-          help="Capital inicial + aportes + resultado acumulado da conta inteira.")
+# ---- metricas (so com dados) ----
+if not df_all.empty:
+    r1, r2, r3, r4 = st.columns(4)
+    r1.metric("💰 Capital Inicial", f"$ {ic:,.2f}",
+              help="Valor que voce comecou a operar. Editavel na sidebar. (Conta inteira)")
+    r2.metric("➕ Total Aportes", f"$ {deposit_total:,.2f}",
+              help="Soma de todos os depositos extras registrados. (Conta inteira)")
+    r3.metric("📊 Resultado do Período", f"$ {total_profit:,.2f}",
+              help="Lucro ou prejuizo acumulado apenas no periodo selecionado acima.")
+    r4.metric("💵 Equity Final", f"$ {equity:,.2f}",
+              help="Capital inicial + aportes + resultado acumulado da conta inteira.")
 
-st.markdown("")
-p1, p2, p3, p4 = st.columns(4)
-with p1:
-    metric_card("🎯 Win Rate", f"{win_rate:.1f}%",
-                "Percentual de trades vencedores no periodo. Verde acima de 55%, amarelo entre 40 e 55%, vermelho abaixo de 40%.",
-                sem_wr(win_rate), "Meta profissional: acima de 50%")
-with p2:
-    metric_card("📈 Profit Factor", f"{pf:.2f}",
-                "Lucro bruto dividido pela perda bruta no periodo. Verde acima de 1.5, amarelo entre 1.0 e 1.5, vermelho abaixo de 1.0.",
-                sem_ratio(pf), "Acima de 1.0 = sistema lucrativo")
-with p3:
-    pf_disp = "∞" if payoff == float("inf") else f"{payoff:.2f}"
-    metric_card("⚖️ Payoff", pf_disp,
-                "Ganho medio dividido pela perda media no periodo. Mostra se suas vitorias pagam suas derrotas.",
-                sem_ratio(payoff if payoff != float("inf") else 99), "Ideal acima de 1.5")
-with p4:
-    metric_card("🎲 Expectativa por Trade", f"$ {expectancy:,.2f}",
-                "Quanto voce ganha em media por trade no periodo. Positivo significa vantagem estatistica a seu favor.",
-                "good" if expectancy > 0 else "bad",
-                f"{expectancy_pct:+.2f}% do capital por trade")
+    st.markdown("")
+    p1, p2, p3, p4 = st.columns(4)
+    with p1:
+        metric_card("🎯 Win Rate", f"{win_rate:.1f}%",
+                    "Percentual de trades vencedores no periodo. Verde acima de 55%, amarelo entre 40 e 55%, vermelho abaixo de 40%.",
+                    sem_wr(win_rate), "Meta profissional: acima de 50%")
+    with p2:
+        metric_card("📈 Profit Factor", f"{pf:.2f}",
+                    "Lucro bruto dividido pela perda bruta no periodo. Verde acima de 1.5, amarelo entre 1.0 e 1.5, vermelho abaixo de 1.0.",
+                    sem_ratio(pf), "Acima de 1.0 = sistema lucrativo")
+    with p3:
+        pf_disp = "∞" if payoff == float("inf") else f"{payoff:.2f}"
+        metric_card("⚖️ Payoff", pf_disp,
+                    "Ganho medio dividido pela perda media no periodo. Mostra se suas vitorias pagam suas derrotas.",
+                    sem_ratio(payoff if payoff != float("inf") else 99), "Ideal acima de 1.5")
+    with p4:
+        metric_card("🎲 Expectativa por Trade", f"$ {expectancy:,.2f}",
+                    "Quanto voce ganha em media por trade no periodo. Positivo significa vantagem estatistica a seu favor.",
+                    "good" if expectancy > 0 else "bad",
+                    f"{expectancy_pct:+.2f}% do capital por trade")
 
-st.markdown("")
-s1, s2, s3, s4 = st.columns(4)
-s1.metric("✅ Vitórias", win_count, help="Trades com lucro no periodo.")
-s2.metric("❌ Derrotas", loss_count, help="Trades com prejuizo no periodo.")
-s3.metric("📉 Drawdown Máx", f"$ {max_dd:,.2f}",
-          help="Maior queda da conta a partir de um topo dentro do periodo selecionado.")
-s4.metric("🔻 Sequência de Perdas", max_loss_streak,
-          help="Maior numero de perdas consecutivas no periodo.")
+    st.markdown("")
+    s1, s2, s3, s4 = st.columns(4)
+    s1.metric("✅ Vitórias", win_count, help="Trades com lucro no periodo.")
+    s2.metric("❌ Derrotas", loss_count, help="Trades com prejuizo no periodo.")
+    s3.metric("📉 Drawdown Máx", f"$ {max_dd:,.2f}",
+              help="Maior queda da conta a partir de um topo dentro do periodo selecionado.")
+    s4.metric("🔻 Sequência de Perdas", max_loss_streak,
+              help="Maior numero de perdas consecutivas no periodo.")
 
-if best_row is not None:
-    st.caption(
-        f"🏆 Melhor trade do período: **{best_row['Ativo']}** em {best_row['Data']} "
-        f"($ {float(best_row['Lucro']):+,.2f})   •   "
-        f"💀 Pior trade do período: **{worst_row['Ativo']}** em {worst_row['Data']} "
-        f"($ {float(worst_row['Lucro']):+,.2f})"
-    )
+    if best_row is not None:
+        st.caption(
+            f"🏆 Melhor trade do período: **{best_row['Ativo']}** em {best_row['Data']} "
+            f"($ {float(best_row['Lucro']):+,.2f})   •   "
+            f"💀 Pior trade do período: **{worst_row['Ativo']}** em {worst_row['Data']} "
+            f"($ {float(worst_row['Lucro']):+,.2f})"
+        )
 
 st.divider()
 
@@ -1101,8 +1145,10 @@ tab_g, tab_i, tab_h, tab_n, tab_p, tab_c = st.tabs([
 # =========================================================
 
 with tab_g:
-    if df.empty:
-        st.info("Adicione trades para ver graficos.")
+    if df_all.empty:
+        st.info("🚀 Seu painel esta vazio. Importe seu historico na barra lateral (📤 Importar) ou registre a primeira operacao na aba ➕ Novo Trade para ver os graficos ganharem vida.")
+    elif df.empty:
+        st.info("Nenhum trade neste periodo. Mude o periodo no topo para ver os graficos.")
     else:
         st.subheader("📈 Evolução do Capital da Conta")
         eventos = []
@@ -1298,8 +1344,10 @@ with tab_i:
         """)
     else:
         st.header("📚 Resumo")
-        if df.empty:
-            st.info("Adicione trades no período selecionado.")
+        if df_all.empty:
+            st.info("🚀 Assim que voce trouxer suas operacoes, esta aba vira o seu raio-X: media de perdas, simulacoes e conquistas.")
+        elif df.empty:
+            st.info("Nenhum trade no periodo selecionado. Mude o periodo no topo.")
         else:
             st.markdown(f"""
             <div class="insight-card">
@@ -1317,22 +1365,22 @@ with tab_i:
             </div>""", unsafe_allow_html=True)
             st.caption("Simulacao historica baseada no periodo. Nao garante resultados.")
 
-            st.divider()
-            st.subheader("🏆 Insignias")
-            st.caption("Conquistas contam sua história COMPLETA, independente do período.")
-            badges = calc_badges(df_all)
-            if not badges:
-                st.info("Registre operacoes para desbloquear.")
-            else:
-                cols = st.columns(min(len(badges), 3))
-                for idx, badge in enumerate(badges):
-                    with cols[idx % len(cols)]:
-                        st.markdown(f"""
-                        <div class="badge-card">
-                            <h2>{badge["icon"]}</h2>
-                            <h4>{badge["name"]}</h4>
-                            <p>{badge["desc"]}</p>
-                        </div>""", unsafe_allow_html=True)
+        st.divider()
+        st.subheader("🏆 Insignias")
+        st.caption("Conquistas contam sua história COMPLETA, independente do período.")
+        badges = calc_badges(df_all)
+        if not badges:
+            st.info("Registre operacoes para desbloquear.")
+        else:
+            cols = st.columns(min(len(badges), 3))
+            for idx, badge in enumerate(badges):
+                with cols[idx % len(cols)]:
+                    st.markdown(f"""
+                    <div class="badge-card">
+                        <h2>{badge["icon"]}</h2>
+                        <h4>{badge["name"]}</h4>
+                        <p>{badge["desc"]}</p>
+                    </div>""", unsafe_allow_html=True)
 
 
 # =========================================================
@@ -1341,7 +1389,7 @@ with tab_i:
 
 with tab_h:
     if df_all.empty:
-        st.info("Nenhum trade.")
+        st.info("🚀 Nenhuma operacao por aqui ainda. Use 📤 Importar na barra lateral para trazer seu historico da MT4/MT5, Binance ou cTrader em segundos — ou registre a primeira na aba ➕ Novo Trade.")
     else:
         if "confirm_bulk_ids" in st.session_state:
             ids = st.session_state["confirm_bulk_ids"]
