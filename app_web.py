@@ -339,7 +339,7 @@ def delete_trade(uid, tid):
 
 
 # =========================================================
-# IMPORTADOR INTELIGENTE (CSV + HTML MT4/MT5)
+# IMPORTADOR INTELIGENTE (CSV + HTML MT4/MT5 + ANTI-DUP)
 # =========================================================
 
 COLUMN_ALIASES = {
@@ -613,6 +613,10 @@ def convert_rows(tmp, mapping):
     return rows
 
 
+def trade_fingerprint(data, asset, profit, volume):
+    return f"{data}|{asset}|{round(float(profit), 4)}|{round(float(volume), 4)}"
+
+
 def import_trades(uid, email, rows):
     if not uid:
         raise ValueError("Usuário não autenticado.")
@@ -622,8 +626,25 @@ def import_trades(uid, email, rows):
     snap = ref.get()
     if not snap.exists:
         raise ValueError("Usuário não encontrado.")
-    count = int(snap.to_dict().get("trade_count", 0))
 
+    existing = load_trades(uid)
+    existing_fps = set()
+    if not existing.empty:
+        for _, r in existing.iterrows():
+            existing_fps.add(trade_fingerprint(r["Data"], r["Ativo"], r["Lucro"], r["Volume"]))
+
+    fresh = []
+    dup = 0
+    for td in rows:
+        fp = trade_fingerprint(td.get("data", ""), td["asset"], td["profit"], td["volume"])
+        if fp in existing_fps:
+            dup += 1
+            continue
+        existing_fps.add(fp)
+        fresh.append(td)
+    rows = fresh
+
+    count = int(snap.to_dict().get("trade_count", 0))
     skipped = 0
     if not has_pro_access(uid, email):
         allowed = max(0, FREE_TRADE_LIMIT - count)
@@ -632,7 +653,7 @@ def import_trades(uid, email, rows):
             rows = rows[:allowed]
 
     if not rows:
-        return 0, skipped
+        return 0, skipped, dup
 
     batch = db.batch()
     for td in rows:
@@ -655,7 +676,7 @@ def import_trades(uid, email, rows):
     batch.commit()
     ref.set({"trade_count": count + len(rows),
              "updated_at": firestore.SERVER_TIMESTAMP}, merge=True)
-    return len(rows), skipped
+    return len(rows), skipped, dup
 
 
 # =========================================================
@@ -912,46 +933,44 @@ with st.sidebar:
                        file_name="meus_trades.csv",
                        mime="text/csv", use_container_width=True)
 
-    up = st.file_uploader("📤 Importar (MT4/MT5 HTML, Binance, cTrader, CSV...)",
+    up = st.file_uploader("📤 Importar (duplicados sao ignorados)",
                           type=["csv", "txt", "html", "htm"], key="import_csv")
     if up is not None:
         fname = up.name
-        if fname == st.session_state.get("last_imported_name"):
-            st.caption(f"✅ '{fname}' já foi importado. Envie outro arquivo para importar mais.")
-        else:
-            if st.session_state.get("csv_file_name") != fname:
-                try:
-                    tmp = read_file_smart(up)
-                    st.session_state["csv_file_name"] = fname
-                    st.session_state["csv_df"] = tmp
-                    st.session_state["csv_auto_map"] = auto_map_columns(tmp.columns)
-                except Exception as e:
-                    st.error(f"❌ Não consegui ler o arquivo: {e}")
-                    st.session_state["csv_file_name"] = None
-            tmp = st.session_state.get("csv_df")
-            auto_map = st.session_state.get("csv_auto_map", {})
-            if tmp is not None and len(tmp) > 0:
-                if "Ativo" not in auto_map:
-                    st.error("❌ Não reconheci a coluna de Ativo automaticamente.")
-                    st.caption("🔎 Colunas lidas: " + " | ".join(str(c) for c in tmp.columns[:14]))
-                else:
-                    preview_rows = convert_rows(tmp, auto_map)
-                    st.caption(f"🔎 {len(preview_rows)} trade(s) pronto(s) para importar.")
-                    if st.button("✅ Confirmar importação", type="primary", use_container_width=True):
-                        try:
-                            n, skipped = import_trades(usuario_id, usuario_email, preview_rows)
-                            st.session_state["last_imported_name"] = fname
-                            st.session_state["df_trades"] = load_trades(usuario_id)
-                            st.session_state["csv_file_name"] = None
-                            if n:
-                                st.success(f"✅ {n} trade(s) importado(s)!")
-                            if skipped:
-                                st.warning(f"⚠️ {skipped} ignorado(s) pelo limite do plano gratuito.")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Erro ao importar: {e}")
-            elif tmp is not None:
-                st.warning("Arquivo sem linhas válidas.")
+        if st.session_state.get("csv_file_name") != fname:
+            try:
+                tmp = read_file_smart(up)
+                st.session_state["csv_file_name"] = fname
+                st.session_state["csv_df"] = tmp
+                st.session_state["csv_auto_map"] = auto_map_columns(tmp.columns)
+            except Exception as e:
+                st.error(f"❌ Não consegui ler o arquivo: {e}")
+                st.session_state["csv_file_name"] = None
+        tmp = st.session_state.get("csv_df")
+        auto_map = st.session_state.get("csv_auto_map", {})
+        if tmp is not None and len(tmp) > 0:
+            if "Ativo" not in auto_map:
+                st.error("❌ Não reconheci a coluna de Ativo automaticamente.")
+                st.caption("🔎 Colunas lidas: " + " | ".join(str(c) for c in tmp.columns[:14]))
+            else:
+                preview_rows = convert_rows(tmp, auto_map)
+                st.caption(f"🔎 {len(preview_rows)} trade(s) pronto(s) para importar.")
+                if st.button("✅ Confirmar importação", type="primary", use_container_width=True):
+                    try:
+                        n, skipped, dup = import_trades(usuario_id, usuario_email, preview_rows)
+                        st.session_state["df_trades"] = load_trades(usuario_id)
+                        st.session_state["csv_file_name"] = None
+                        if n:
+                            st.success(f"✅ {n} trade(s) importado(s)!")
+                        if dup:
+                            st.warning(f"🔁 {dup} trade(s) ignorado(s): já existiam na sua conta.")
+                        if skipped:
+                            st.warning(f"⚠️ {skipped} ignorado(s) pelo limite do plano gratuito.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao importar: {e}")
+        elif tmp is not None:
+            st.warning("Arquivo sem linhas válidas.")
 
     if st.button("🔄 Sincronizar", use_container_width=True):
         try:
@@ -1494,20 +1513,42 @@ with tab_h:
             st.divider()
 
         if period != "🗓️ Tudo":
-            st.caption(f"🔎 Mostrando **{len(df)}** de **{len(df_all)}** trades (período: {period}). Mude o período no topo para ver mais.")
+            st.caption(f"📅 Período: **{period}** — mostrando {len(df)} de {len(df_all)} trades.")
+
+        st.subheader("🔍 Buscar no histórico")
+        f1, f2 = st.columns([3, 1])
+        with f1:
+            search_txt = st.text_input("Filtrar por ativo ou observação",
+                                       key="hist_search", placeholder="Ex.: USDJPY")
+        with f2:
+            tipo_filter = st.selectbox("Tipo", ["Todos", "buy", "sell"], key="hist_type")
+
+        df_view = df.copy()
+        if search_txt.strip():
+            q = search_txt.strip().lower()
+            mask = (df_view["Ativo"].astype(str).str.lower().str.contains(q, na=False) |
+                    df_view["Obs"].astype(str).str.lower().str.contains(q, na=False))
+            df_view = df_view[mask]
+        if tipo_filter != "Todos":
+            df_view = df_view[df_view["Tipo"] == tipo_filter]
+        df_view = df_view.reset_index(drop=True)
 
         if df.empty:
             st.info("Nenhum trade neste período.")
+        elif df_view.empty:
+            st.info("Nenhum trade corresponde à busca. Limpe o filtro acima.")
         else:
+            if search_txt.strip() or tipo_filter != "Todos":
+                st.caption(f"🔎 Mostrando **{len(df_view)}** de **{len(df)}** trades do período.")
             dcols = [c for c in TRADE_COLUMNS if c != "id"]
-            st.dataframe(df[dcols].sort_index(ascending=False),
+            st.dataframe(df_view[dcols].sort_index(ascending=False),
                          use_container_width=True, hide_index=True)
             st.divider()
 
             st.subheader("Acoes por trade")
             labels = []
             label_to_id = {}
-            for _, r in df.sort_index(ascending=False).iterrows():
+            for _, r in df_view.sort_index(ascending=False).iterrows():
                 lbl = f"{r['Data']}  |  {r['Ativo']}  |  {r['Tipo']}  |  $ {float(r['Lucro']):,.2f}  |  #{str(r['id'])[:4]}"
                 labels.append(lbl)
                 label_to_id[lbl] = r["id"]
