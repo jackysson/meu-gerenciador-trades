@@ -1291,11 +1291,23 @@ with tab_g:
                         "Multiplicador": fmt_mult(proj / base_capital),
                     })
 
-                proj_final = curva_v[-1]
+                                proj_final = curva_v[-1]
+                mult_final = proj_final / base_capital if base_capital > 0 else 0.0
+                pct_final = (mult_final - 1) * 100
                 m1, m2, m3 = st.columns(3)
-                m1.metric("💵 Equity projetado", fmt_money(proj_final))
-                m2.metric("📈 Lucro projetado", fmt_money(proj_final - base_capital))
-                m3.metric("✖️ Multiplicador", fmt_mult(proj_final / base_capital))
+                m1.metric("💵 Equity projetado", fmt_money(proj_final),
+                          help="Saldo final projetado da conta apos o numero de trades escolhido.")
+                m2.metric("📈 Lucro projetado", fmt_money(proj_final - base_capital),
+                          help="Quanto a conta ganharia alem do capital base.")
+                m3.metric("✖️ Multiplicador", fmt_mult(mult_final),
+                          help="Quantas vezes o capital se multiplica. 2x = dobrou (+100%). 0,5x = perdeu metade (-50%). Formula: Equity Projetado dividido pelo Capital Base.")
+                st.caption(
+                    f"📖 Como ler: **{fmt_mult(mult_final)}** significa que seu capital de "
+                    f"**{fmt_money(base_capital)}** cresceria para **{fmt_money(proj_final)}** "
+                    f"(variacao de **{pct_final:+,.0f}%**)."
+                )
+                if mult_final > 100:
+                    st.warning("⚠️ Acima de 100x a projecao deixa de ser realista: nenhum trader mantem essa taxa por tantos trades. Use como curiosidade, nao como meta.")
 
                 fig_proj = px.area(x=curva_n, y=curva_v,
                                    title=f"Projeção de Equity até {int(custom_n)} trades",
